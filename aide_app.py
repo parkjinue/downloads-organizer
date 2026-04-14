@@ -27,7 +27,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.9"
+CURRENT_VERSION = "v1.0.10"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -79,10 +79,15 @@ def pick_folder():
 # ── 자동 업데이트 ─────────────────────────────────────────
 def check_update():
     try:
+        import ssl
+        ctx = ssl.create_default_context()
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        req = urllib.request.Request(url, headers={"User-Agent": "AIDE"})
-        with urllib.request.urlopen(req, timeout=5) as res:
-            data = json.loads(res.read())
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 AIDE/1.0",
+            "Accept": "application/vnd.github.v3+json"
+        })
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as res:
+            data = json.loads(res.read().decode("utf-8"))
             latest = data.get("tag_name", "")
             download_url = None
             for asset in data.get("assets", []):
@@ -90,7 +95,8 @@ def check_update():
                     download_url = asset["browser_download_url"]
                     break
             return latest, download_url
-    except:
+    except Exception as e:
+        print(f"업데이트 확인 실패: {e}")
         return None, None
 
 
@@ -319,28 +325,27 @@ class AIDEApp(rumps.App):
         time.sleep(3)
         latest, download_url = check_update()
         if latest and latest != CURRENT_VERSION:
-            self._prompt_update(latest, download_url)
+            send_notification(
+                "🆕 AIDE 업데이트",
+                f"새 버전 {latest} 이 있습니다. 메뉴바에서 업데이트 확인을 눌러주세요."
+            )
+            self._pending_update = (latest, download_url)
 
     def check_for_update(self, _=None):
-        def _check():
-            latest, download_url = check_update()
-            if latest and latest != CURRENT_VERSION:
-                self._prompt_update(latest, download_url)
-            elif latest:
-                send_notification("✅ 최신 버전", f"{CURRENT_VERSION} 이 최신 버전입니다.")
-            else:
-                send_notification("❌ 확인 실패", "업데이트 서버에 연결할 수 없습니다.")
-        threading.Thread(target=_check, daemon=True).start()
+        latest, download_url = check_update()
+        if latest and latest != CURRENT_VERSION:
+            send_notification(
+                "🆕 업데이트 발견",
+                f"새 버전 {latest} 다운로드 중..."
+            )
+            threading.Thread(target=download_and_update, args=(download_url,), daemon=True).start()
+        elif latest:
+            send_notification("✅ 최신 버전", f"{CURRENT_VERSION} 이 최신 버전입니다.")
+        else:
+            send_notification("❌ 확인 실패", "업데이트 서버에 연결할 수 없습니다.")
 
     def _prompt_update(self, latest, download_url):
-        response = rumps.alert(
-            title="업데이트",
-            message=f"새 버전 {latest} 이 있습니다. 업데이트할까요?",
-            ok="업데이트",
-            cancel="나중에"
-        )
-        if response == 1 and download_url:
-            threading.Thread(target=download_and_update, args=(download_url,), daemon=True).start()
+        pass
 
     def start_watching(self):
         if self.observer and self.observer.is_alive():

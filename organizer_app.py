@@ -23,7 +23,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.0"
+CURRENT_VERSION = "v1.0.1"
 
 
 # ── 자동 업데이트 ─────────────────────────────────────────

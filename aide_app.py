@@ -27,7 +27,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.17"
+CURRENT_VERSION = "v1.0.18"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -107,24 +107,21 @@ def download_and_update(download_url):
         tmp_zip = Path.home() / "Downloads" / f"aide_update_{ts}.zip"
         extract_dir = Path.home() / "Downloads" / f"aide_update_{ts}"
 
-        # 현재 실행 중인 앱 경로 동적으로 찾기
+        # 현재 실행 중인 앱 경로 정확하게 찾기
         exe_path = Path(sys.executable)
         if "Contents" in str(exe_path):
-            # .app/Contents/MacOS/AIDE -> .app
             app_path = exe_path.parent.parent.parent
         else:
-            # 혹시 못 찾으면 기본값
             app_path = Path("/Applications/AIDE.app")
-        
-        print(f"앱 경로: {app_path}")
 
         send_notification("⬇️ 다운로드 중", "새 버전 다운로드 중...")
         urllib.request.urlretrieve(download_url, tmp_zip)
 
         extract_dir.mkdir(exist_ok=True)
-        with zipfile.ZipFile(tmp_zip, 'r') as z:
+        with zipfile.ZipFile(tmp_zip, "r") as z:
             z.extractall(extract_dir)
 
+        # 새 앱 찾기
         new_app = None
         for item in extract_dir.rglob("*.app"):
             new_app = item
@@ -133,21 +130,32 @@ def download_and_update(download_url):
         if new_app is None:
             raise Exception("앱 파일을 찾을 수 없습니다.")
 
-        # 교체 스크립트 생성 (앱 종료 후 실행)
+        # 교체 스크립트 생성
         update_script = Path.home() / "Downloads" / f"aide_updater_{ts}.sh"
         script_content = f"""#!/bin/bash
 sleep 2
+# 백업
+cp -R '{app_path}' '{app_path}.bak' 2>/dev/null || true
+# 교체
 rm -rf '{app_path}'
 mv '{new_app}' '{app_path}'
-rm -rf '{extract_dir}'
-rm -f '{tmp_zip}'
-open '{app_path}'
-rm -f '$0'
+if [ $? -eq 0 ]; then
+    rm -rf '{app_path}.bak'
+    rm -rf '{extract_dir}'
+    rm -f '{tmp_zip}'
+    xattr -cr '{app_path}'
+    chmod -R 755 '{app_path}'
+    open '{app_path}'
+else
+    mv '{app_path}.bak' '{app_path}'
+    osascript -e 'display notification "업데이트 실패. 기존 버전으로 복구됐습니다." with title "AIDE"'
+    open '{app_path}'
+fi
+rm -f '{update_script}'
 """
         update_script.write_text(script_content)
         update_script.chmod(0o755)
 
-        # 교체 스크립트 백그라운드 실행 후 앱 종료
         subprocess.Popen(["bash", str(update_script)])
         send_notification("✅ 업데이트 준비 완료", "앱이 재시작됩니다.")
         time.sleep(1)

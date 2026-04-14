@@ -27,7 +27,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.15"
+CURRENT_VERSION = "v1.0.16"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -107,12 +107,16 @@ def download_and_update(download_url):
         tmp_zip = Path.home() / "Downloads" / f"aide_update_{ts}.zip"
         extract_dir = Path.home() / "Downloads" / f"aide_update_{ts}"
 
-        # 현재 실행 중인 앱 경로
+        # 현재 실행 중인 앱 경로 동적으로 찾기
         exe_path = Path(sys.executable)
         if "Contents" in str(exe_path):
+            # .app/Contents/MacOS/AIDE -> .app
             app_path = exe_path.parent.parent.parent
         else:
+            # 혹시 못 찾으면 기본값
             app_path = Path("/Applications/AIDE.app")
+        
+        print(f"앱 경로: {app_path}")
 
         send_notification("⬇️ 다운로드 중", "새 버전 다운로드 중...")
         urllib.request.urlretrieve(download_url, tmp_zip)

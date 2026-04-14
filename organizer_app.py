@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Downloads Organizer - Menu Bar App (자동 업데이트 포함)
+Downloads Organizer - Menu Bar App (자동 업데이트 + 폴더 설정)
 """
 
 import rumps
@@ -17,13 +17,47 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 # ── 설정 ──────────────────────────────────────────────────
-WATCH_DIR = Path.home() / "Downloads"
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".heic", ".heif", ".svg", ".avif"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".mxf", ".prproj"}
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
 CURRENT_VERSION = "v1.0.1"
+
+# 설정 파일 경로
+PREFS_PATH = Path.home() / "Library" / "Application Support" / "DownloadsOrganizer" / "prefs.json"
+
+
+# ── 설정 저장/불러오기 ────────────────────────────────────
+def load_prefs():
+    if PREFS_PATH.exists():
+        with open(PREFS_PATH) as f:
+            return json.load(f)
+    return {"watch_dir": str(Path.home() / "Downloads")}
+
+
+def save_prefs(prefs):
+    PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(PREFS_PATH, "w") as f:
+        json.dump(prefs, f)
+
+
+# ── 폴더 선택 다이얼로그 ──────────────────────────────────
+def pick_folder():
+    script = '''
+    tell application "System Events"
+        activate
+    end tell
+    tell application "Finder"
+        activate
+        set chosen to choose folder with prompt "감시할 폴더를 선택하세요"
+        return POSIX path of chosen
+    end tell
+    '''
+    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
 
 
 # ── 자동 업데이트 ─────────────────────────────────────────
@@ -106,10 +140,10 @@ def get_unique_path(target_path):
         counter += 1
 
 
-def process_file(file_path):
+def process_file(file_path, watch_dir):
     if file_path.name.startswith(".") or file_path.suffix in (".crdownload", ".part", ".tmp"):
         return
-    if file_path.parent != WATCH_DIR:
+    if file_path.parent != watch_dir:
         return
     if not file_path.exists() or not file_path.is_file():
         return
@@ -135,7 +169,7 @@ def process_file(file_path):
         return
 
     date_prefix = datetime.now().strftime("%m%d")
-    dest_dir = WATCH_DIR / project_name / media_type
+    dest_dir = watch_dir / project_name / media_type
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     new_filename = f"{date_prefix}_{rest_name}{ext}"
@@ -158,15 +192,18 @@ def process_file(file_path):
 
 
 class DownloadHandler(FileSystemEventHandler):
+    def __init__(self, watch_dir):
+        self.watch_dir = watch_dir
+
     def on_created(self, event):
         if not event.is_directory:
             time.sleep(1.0)
-            process_file(Path(event.src_path))
+            process_file(Path(event.src_path), self.watch_dir)
 
     def on_moved(self, event):
         if not event.is_directory:
             time.sleep(0.5)
-            process_file(Path(event.dest_path))
+            process_file(Path(event.dest_path), self.watch_dir)
 
 
 # ── 메뉴바 앱 ─────────────────────────────────────────────
@@ -174,17 +211,38 @@ class OrganizerApp(rumps.App):
     def __init__(self):
         super().__init__("📁", quit_button=None)
         self.observer = None
+        self.prefs = load_prefs()
+        self.watch_dir = Path(self.prefs["watch_dir"])
+
         self.menu = [
             rumps.MenuItem("● 감시 중", callback=None),
             rumps.MenuItem(f"버전 {CURRENT_VERSION}", callback=None),
             None,
             rumps.MenuItem("중지", callback=self.stop_watching),
+            rumps.MenuItem(f"📂 {self.watch_dir.name}", callback=None),
+            rumps.MenuItem("폴더 변경", callback=self.change_folder),
             rumps.MenuItem("업데이트 확인", callback=self.check_for_update),
             None,
             rumps.MenuItem("종료", callback=self.quit_app),
         ]
         self.start_watching()
         threading.Thread(target=self._auto_check_update, daemon=True).start()
+
+    def change_folder(self, _):
+        folder = pick_folder()
+        if folder:
+            self.stop_watching()
+            self.watch_dir = Path(folder)
+            self.prefs["watch_dir"] = folder
+            save_prefs(self.prefs)
+            self.menu["📂 " + list(self.menu.keys())[4].split("/")[-1]].title = f"📂 {self.watch_dir.name}"
+            self.start_watching()
+            send_notification("📁 폴더 변경 완료", f"감시 폴더: {self.watch_dir.name}")
+            # 메뉴 폴더명 갱신
+            for key in list(self.menu.keys()):
+                if key.startswith("📂"):
+                    self.menu[key].title = f"📂 {self.watch_dir.name}"
+                    break
 
     def _auto_check_update(self):
         time.sleep(3)
@@ -217,7 +275,7 @@ class OrganizerApp(rumps.App):
         if self.observer and self.observer.is_alive():
             return
         self.observer = Observer()
-        self.observer.schedule(DownloadHandler(), str(WATCH_DIR), recursive=False)
+        self.observer.schedule(DownloadHandler(self.watch_dir), str(self.watch_dir), recursive=False)
         self.observer.start()
         self.title = "📁"
         self.menu["● 감시 중"].title = "● 감시 중"

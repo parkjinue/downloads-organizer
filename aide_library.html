@@ -171,7 +171,9 @@ body{background:var(--bg);font-family:-apple-system,sans-serif;color:var(--text)
     <button class="tool-tab" onclick="filterTool('Midjourney',this)">Midjourney</button>
     <button class="tool-tab" onclick="filterTool('Kling',this)">Kling</button>
     <button class="tool-tab" onclick="filterTool('Luma',this)">Luma</button>
-    <button class="tool-tab" onclick="filterTool('Hailuo',this)">Hailuo</button>
+    <button class="tool-tab" onclick="filterTool('나노바나나',this)">나노바나나</button>
+    <button class="tool-tab" onclick="filterTool('시드림',this)">시드림</button>
+    <button class="tool-tab" onclick="filterTool('시댄스',this)">시댄스</button>
   </div>
   <div class="grid" id="grid"></div>
 </div>
@@ -247,12 +249,15 @@ body{background:var(--bg);font-family:-apple-system,sans-serif;color:var(--text)
           <div class="form-group" style="flex:1">
             <label class="form-label">툴</label>
             <select class="form-select" id="f-tool" onchange="updateParamBuilder()">
-              <option>Midjourney</option><option>Kling</option><option>Luma</option><option>Hailuo</option>
+              <option>Midjourney</option><option>Kling</option><option>Luma</option><option>나노바나나</option><option>시드림</option><option>시댄스</option>
             </select>
           </div>
           <div class="form-group" style="flex:1">
             <label class="form-label">프로젝트</label>
-            <select class="form-select" id="f-project"></select>
+            <div style="display:flex;gap:6px;">
+              <select class="form-select" id="f-project" style="flex:1;"></select>
+              <button onclick="openProjectModal()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0 10px;font-size:16px;cursor:pointer;flex-shrink:0;">+</button>
+            </div>
           </div>
         </div>
         <div class="form-group">
@@ -292,12 +297,14 @@ body{background:var(--bg);font-family:-apple-system,sans-serif;color:var(--text)
 
 <script>
 const EMOJIS=['🌊','🔥','🌙','⚡','🎬','🌸','💫','🎨','🏔','🌃'];
-const COLORS=['#7c6aff','#e24b4a','#27c16e','#f5a623','#4ac8e8','#e87ae8','#ff6b35','#aaa'];
+const COLORS=['#7c6aff','#e24b4a','#27c16e','#f5a623','#4ac8e8','#e87ae8','#ff6b35','#aaa','#ff9f43','#ee5a24','#0652DD','#1289A7','#C4E538','#FDA7DF','#ED4C67','#F79F1F','#12CBC4','#9980FA'];
 const PARAMS={
   Midjourney:['--ar 16:9','--ar 1:1','--ar 9:16','--v 6','--style raw','--q 2','--no text','--chaos 20'],
   Kling:['16:9','9:16','1:1','5s','10s','smooth','cinematic','pro'],
   Luma:['16:9','4K','smooth','orbit','pan','timelapse','slow motion'],
-  Hailuo:['16:9','9:16','720p','1080p','slow motion','loop'],
+  나노바나나:['--ar 16:9','--ar 1:1','--ar 9:16','--v 6','--style raw'],
+  시드림:['16:9','9:16','4K','smooth','cinematic'],
+  시댄스:['16:9','9:16','slow motion','loop'],
 };
 
 let data={projects:[

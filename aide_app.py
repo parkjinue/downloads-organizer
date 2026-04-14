@@ -27,7 +27,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.8"
+CURRENT_VERSION = "v1.0.9"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -231,6 +231,7 @@ class AIDEApp(rumps.App):
         self.window = None
         self.api = LibraryAPI()
 
+        self.folder_item = rumps.MenuItem(f"📂 {self.watch_dir.name}", callback=None)
         self.menu = [
             rumps.MenuItem("🟢 감시 중", callback=None),
             rumps.MenuItem(f"버전 {CURRENT_VERSION}", callback=None),
@@ -238,7 +239,7 @@ class AIDEApp(rumps.App):
             rumps.MenuItem("📚 라이브러리 열기", callback=self.open_library),
             None,
             rumps.MenuItem("중지", callback=self.stop_watching),
-            rumps.MenuItem(f"📂 {self.watch_dir.name}", callback=None),
+            self.folder_item,
             rumps.MenuItem("폴더 변경", callback=self.change_folder),
             rumps.MenuItem("업데이트 확인", callback=self.check_for_update),
             None,
@@ -310,10 +311,7 @@ class AIDEApp(rumps.App):
             self.watch_dir = Path(folder)
             self.prefs["watch_dir"] = folder
             save_prefs(self.prefs)
-            for key in list(self.menu.keys()):
-                if key.startswith("📂"):
-                    self.menu[key].title = f"📂 {self.watch_dir.name}"
-                    break
+            self.folder_item.title = f"📂 {self.watch_dir.name}"
             self.start_watching()
             send_notification("📁 폴더 변경 완료", f"감시 폴더: {self.watch_dir.name}")
 

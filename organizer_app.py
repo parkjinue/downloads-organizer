@@ -22,7 +22,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.5"
+CURRENT_VERSION = "v1.0.6"
 
 # 설정 파일 경로
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "DownloadsOrganizer" / "prefs.json"
@@ -215,7 +215,7 @@ class OrganizerApp(rumps.App):
         self.watch_dir = Path(self.prefs["watch_dir"])
 
         self.menu = [
-            rumps.MenuItem("● 감시 중", callback=None),
+            rumps.MenuItem("🟢 감시 중", callback=None),
             rumps.MenuItem(f"버전 {CURRENT_VERSION}", callback=None),
             None,
             rumps.MenuItem("중지", callback=self.stop_watching),
@@ -272,7 +272,7 @@ class OrganizerApp(rumps.App):
         self.observer.schedule(DownloadHandler(self.watch_dir), str(self.watch_dir), recursive=False)
         self.observer.start()
         self.title = "📁"
-        self.menu["● 감시 중"].title = "● 감시 중"
+        self.menu["🟢 감시 중"].title = "🟢 감시 중"
         self.menu["중지"].title = "중지"
         self.menu["중지"].set_callback(self.stop_watching)
 
@@ -282,13 +282,13 @@ class OrganizerApp(rumps.App):
             self.observer.join()
             self.observer = None
         self.title = "📁✕"
-        self.menu["● 감시 중"].title = "○ 중지됨"
+        self.menu["🟢 감시 중"].title = "🟡 중지됨"
         self.menu["중지"].title = "시작"
         self.menu["중지"].set_callback(self.resume_watching)
 
     def resume_watching(self, _=None):
         self.start_watching()
-        self.menu["● 감시 중"].title = "● 감시 중"
+        self.menu["🟡 중지됨"].title = "🟢 감시 중"
         self.menu["중지"].title = "중지"
         self.menu["중지"].set_callback(self.stop_watching)
 

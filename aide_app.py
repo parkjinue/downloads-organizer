@@ -27,7 +27,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.19"
+CURRENT_VERSION = "v1.0.20"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -107,7 +107,6 @@ def download_and_update(download_url):
         tmp_zip = Path.home() / "Downloads" / f"aide_update_{ts}.zip"
         extract_dir = Path.home() / "Downloads" / f"aide_update_{ts}"
 
-        # 현재 실행 중인 앱 경로 정확하게 찾기
         exe_path = Path(sys.executable)
         if "Contents" in str(exe_path):
             app_path = exe_path.parent.parent.parent
@@ -115,48 +114,67 @@ def download_and_update(download_url):
             app_path = Path("/Applications/AIDE.app")
 
         send_notification("⬇️ 다운로드 중", "새 버전 다운로드 중...")
-        urllib.request.urlretrieve(download_url, tmp_zip)
+        urllib.request.urlretrieve(download_url, str(tmp_zip))
 
         extract_dir.mkdir(exist_ok=True)
-        with zipfile.ZipFile(tmp_zip, "r") as z:
-            z.extractall(extract_dir)
+        with zipfile.ZipFile(str(tmp_zip), "r") as z:
+            z.extractall(str(extract_dir))
 
-        # 새 앱 찾기
         new_app = None
         for item in extract_dir.rglob("*.app"):
             new_app = item
             break
 
         if new_app is None:
-            raise Exception("앱 파일을 찾을 수 없습니다.")
+            raise Exception("App file not found")
 
-        # 교체 스크립트 생성
-        update_script = Path.home() / "Downloads" / f"aide_updater_{ts}.sh"
-        script_content = f"""#!/bin/bash
-sleep 2
-# 백업
-cp -R '{app_path}' '{app_path}.bak' 2>/dev/null || true
-# 교체
-rm -rf '{app_path}'
-mv '{new_app}' '{app_path}'
-if [ $? -eq 0 ]; then
-    rm -rf '{app_path}.bak'
-    rm -rf '{extract_dir}'
-    rm -f '{tmp_zip}'
-    xattr -cr '{app_path}'
-    chmod -R 755 '{app_path}'
-    open '{app_path}'
-else
-    mv '{app_path}.bak' '{app_path}'
-    osascript -e 'display notification "업데이트 실패. 기존 버전으로 복구됐습니다." with title "AIDE"'
-    open '{app_path}'
-fi
-rm -f '{update_script}'
-"""
-        update_script.write_text(script_content)
-        update_script.chmod(0o755)
+        # 경로를 ASCII 안전하게 처리
+        app_path_str = str(app_path)
+        new_app_str = str(new_app)
+        extract_dir_str = str(extract_dir)
+        tmp_zip_str = str(tmp_zip)
+        update_script_path = str(Path.home() / "Downloads" / f"aide_updater_{ts}.sh")
 
-        subprocess.Popen(["bash", str(update_script)])
+        script_content = "#!/bin/bash
+"
+        script_content += "sleep 2
+"
+        script_content += f'cp -R "{app_path_str}" "{app_path_str}.bak" 2>/dev/null || true
+'
+        script_content += f'rm -rf "{app_path_str}"
+'
+        script_content += f'mv "{new_app_str}" "{app_path_str}"
+'
+        script_content += "if [ $? -eq 0 ]; then
+"
+        script_content += f'    rm -rf "{app_path_str}.bak"
+'
+        script_content += f'    rm -rf "{extract_dir_str}"
+'
+        script_content += f'    rm -f "{tmp_zip_str}"
+'
+        script_content += f'    xattr -cr "{app_path_str}"
+'
+        script_content += f'    chmod -R 755 "{app_path_str}"
+'
+        script_content += f'    open "{app_path_str}"
+'
+        script_content += "else
+"
+        script_content += f'    mv "{app_path_str}.bak" "{app_path_str}"
+'
+        script_content += f'    open "{app_path_str}"
+'
+        script_content += "fi
+"
+        script_content += f'rm -f "{update_script_path}"
+'
+
+        with open(update_script_path, "w", encoding="utf-8") as f:
+            f.write(script_content)
+        os.chmod(update_script_path, 0o755)
+
+        subprocess.Popen(["bash", update_script_path])
         send_notification("✅ 업데이트 준비 완료", "앱이 재시작됩니다.")
         time.sleep(1)
         rumps.quit_application()

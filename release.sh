@@ -29,7 +29,8 @@ NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
 echo "🆕 새 버전: $NEW_TAG"
 
 # ── 4. 앱 버전 업데이트 ───────────────────────────────────
-sed -i '' "s/CURRENT_VERSION = \"v.*\"/CURRENT_VERSION = \"${NEW_TAG}\"/" "$SCRIPT_DIR/organizer_app.py"
+sed -i '' "s/CURRENT_VERSION = \"v.*\"/CURRENT_VERSION = \"${NEW_TAG}\"/" "$SCRIPT_DIR/aide_app.py"
+sed -i '' "s/CURRENT_VERSION = \"v.*\"/CURRENT_VERSION = \"${NEW_TAG}\"/" "$SCRIPT_DIR/organizer_app.py" 2>/dev/null || true
 
 # ── 5. CHANGELOG.md 업데이트 ──────────────────────────────
 DATE=$(date "+%Y-%m-%d")

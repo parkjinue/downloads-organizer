@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>AIDE Library</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0f0f0f;--bg2:#141414;--bg3:#1a1a1a;--bg4:#222;
+  --border:#252525;--border2:#333;
+  --text:#f0f0f0;--text2:#aaa;--text3:#666;
+  --accent:#7c6aff;--accent-bg:#1e1a3a;--accent-text:#a99fff;
+  --card:#161616;--sidebar:#111;
+}
+.light{
+  --bg:#f5f4f0;--bg2:#ffffff;--bg3:#f0eeea;--bg4:#e8e6e0;
+  --border:#e0ddd6;--border2:#ccc;
+  --text:#1a1a1a;--text2:#555;--text3:#999;
+  --accent:#5a4fff;--accent-bg:#ece9ff;--accent-text:#4a3fcc;
+  --card:#fff;--sidebar:#fafaf8;
+}
+body{background:var(--bg);font-family:-apple-system,sans-serif;color:var(--text);height:100vh;display:flex;overflow:hidden;}
+
+.sidebar{width:200px;flex-shrink:0;background:var(--sidebar);border-right:0.5px solid var(--border);padding:16px 0;display:flex;flex-direction:column;overflow:hidden;}
+.logo{padding:0 16px 20px;font-size:17px;font-weight:700;letter-spacing:-0.5px;display:flex;align-items:center;gap:8px;}
+.logo-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;}
+.nav-section{padding:0 10px;margin-bottom:16px;}
+.nav-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding:0 8px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;}
+.nav-add-btn{width:16px;height:16px;border-radius:4px;background:var(--bg4);border:none;color:var(--text3);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;line-height:1;transition:all 0.15s;}
+.nav-add-btn:hover{background:var(--accent);color:#fff;}
+.nav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 8px;border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all 0.15s;}
+.nav-item:hover{background:var(--bg4);color:var(--text);}
+.nav-item.active{background:var(--accent-bg);color:var(--accent-text);}
+.nav-item-left{display:flex;align-items:center;gap:6px;}
+.nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.nav-del{opacity:0;font-size:11px;color:var(--text3);transition:opacity 0.15s;cursor:pointer;padding:2px 4px;border-radius:4px;}
+.nav-item:hover .nav-del{opacity:1;}
+.nav-del:hover{color:#e24b4a;}
+.tag-pill{display:inline-flex;padding:3px 9px;border-radius:20px;font-size:11px;cursor:pointer;border:0.5px solid var(--border2);color:var(--text3);margin:2px;transition:all 0.15s;}
+.tag-pill:hover{color:var(--text2);}
+.tag-pill.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-text);}
+.theme-toggle{margin-top:auto;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text3);}
+.toggle-btn{width:36px;height:20px;background:var(--bg4);border-radius:20px;cursor:pointer;position:relative;border:0.5px solid var(--border2);transition:background 0.2s;}
+.toggle-btn.on{background:var(--accent);}
+.toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform 0.2s;}
+.toggle-btn.on .toggle-knob{transform:translateX(16px);}
+
+.main{flex:1;padding:20px 24px;overflow:auto;display:flex;flex-direction:column;}
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+.search-wrap{flex:1;position:relative;}
+.search{width:100%;background:var(--bg3);border:0.5px solid var(--border);border-radius:10px;padding:8px 12px 8px 34px;font-size:13px;color:var(--text);outline:none;transition:border-color 0.15s;}
+.search:focus{border-color:var(--accent);}
+.search::placeholder{color:var(--text3);}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;}
+.btn-add{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;}
+
+.tool-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+.tool-tab{padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:0.5px solid var(--border2);color:var(--text3);transition:all 0.15s;background:transparent;}
+.tool-tab:hover{color:var(--text2);}
+.tool-tab.active{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-text);}
+
+.grid{columns:4;column-gap:10px;}
+@media(max-width:1100px){.grid{columns:3;}}
+.card{break-inside:avoid;background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:10px;border:0.5px solid var(--border);cursor:pointer;transition:transform 0.15s,border-color 0.15s;}
+.card:hover{transform:translateY(-2px);border-color:var(--border2);}
+.card-thumb-placeholder{width:100%;display:flex;align-items:center;justify-content:center;color:var(--text3);}
+.card-body{padding:10px 12px 12px;}
+.card-title{font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-prompt{font-size:11px;color:var(--text2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:8px;}
+.card-footer{display:flex;align-items:center;justify-content:space-between;}
+.card-tags{display:flex;gap:4px;flex-wrap:wrap;}
+.card-tag{padding:2px 6px;background:var(--bg3);border-radius:6px;font-size:10px;color:var(--text3);}
+.star{font-size:14px;cursor:pointer;color:var(--text3);transition:color 0.15s;}
+.star.on{color:#f5c542;}
+.tool-badge{font-size:10px;padding:2px 6px;border-radius:6px;background:var(--accent-bg);color:var(--accent-text);margin-bottom:6px;display:inline-block;}
+.empty-state{text-align:center;padding:80px 20px;color:var(--text3);font-size:13px;}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal-close{background:var(--bg4);border:none;border-radius:8px;padding:4px 8px;cursor:pointer;color:var(--text2);font-size:14px;}
+
+.modal{background:var(--bg2);border-radius:18px;border:0.5px solid var(--border2);width:560px;max-height:85vh;overflow:auto;padding:24px;}
+.modal-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;}
+.modal-title{font-size:16px;font-weight:600;color:var(--text);}
+.modal-thumb{width:100%;border-radius:12px;margin-bottom:14px;background:var(--bg4);display:flex;align-items:center;justify-content:center;min-height:160px;overflow:hidden;}
+.modal-thumb img,.modal-thumb video{width:100%;border-radius:12px;}
+.modal-section{margin-bottom:14px;}
+.modal-label{font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text3);margin-bottom:6px;}
+.modal-prompt{background:var(--bg3);border-radius:10px;padding:12px;font-size:12px;color:var(--text2);line-height:1.7;font-family:monospace;white-space:pre-wrap;word-break:break-all;}
+.btn-copy{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;margin-top:8px;}
+
+.add-modal{background:var(--bg2);border-radius:18px;border:0.5px solid var(--border2);width:500px;max-height:88vh;overflow:auto;}
+.add-modal-header{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.add-modal-title{font-size:16px;font-weight:600;color:var(--text);}
+.steps{display:flex;gap:6px;padding:0 24px;margin-bottom:20px;}
+.step{flex:1;height:3px;border-radius:2px;background:var(--bg4);transition:background 0.3s;}
+.step.done{background:var(--accent);}
+.step-body{padding:0 24px 24px;}
+
+.dropzone{border:1.5px dashed var(--border2);border-radius:14px;padding:50px 20px;text-align:center;cursor:pointer;transition:all 0.2s;}
+.dropzone:hover,.dropzone.drag{border-color:var(--accent);background:var(--accent-bg);}
+.dropzone-icon{font-size:36px;margin-bottom:12px;}
+.dropzone-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:6px;}
+.dropzone-sub{font-size:12px;color:var(--text3);line-height:1.6;}
+.preview-thumb{width:100%;border-radius:12px;overflow:hidden;margin-bottom:10px;background:var(--bg4);min-height:140px;display:flex;align-items:center;justify-content:center;}
+.preview-thumb img,.preview-thumb video{width:100%;max-height:220px;object-fit:cover;border-radius:12px;}
+
+.form-group{margin-bottom:14px;}
+.form-label{font-size:12px;color:var(--text2);margin-bottom:6px;display:block;}
+.form-input{width:100%;background:var(--bg3);border:0.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);outline:none;transition:border-color 0.15s;}
+.form-input:focus{border-color:var(--accent);}
+.form-select{width:100%;background:var(--bg3);border:0.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);outline:none;}
+.form-textarea{width:100%;background:var(--bg3);border:0.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);outline:none;resize:vertical;min-height:90px;font-family:monospace;line-height:1.6;}
+.form-textarea:focus{border-color:var(--accent);}
+.param-builder{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.param-btn{padding:4px 10px;border-radius:8px;font-size:11px;border:0.5px solid var(--border2);color:var(--text3);cursor:pointer;background:transparent;transition:all 0.15s;}
+.param-btn:hover{border-color:var(--accent);color:var(--accent-text);}
+.param-btn.on{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-text);}
+.param-preview{margin-top:6px;font-size:11px;color:var(--accent-text);font-family:monospace;min-height:16px;}
+.btn-row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.btn-cancel{background:var(--bg4);color:var(--text2);border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;}
+.btn-next{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-weight:500;}
+.btn-save{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:500;}
+
+.small-modal{background:var(--bg2);border-radius:16px;border:0.5px solid var(--border2);width:340px;padding:20px;}
+.color-picker{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.color-dot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all 0.15s;}
+.color-dot.sel{border-color:var(--text);transform:scale(1.15);}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="logo"><span class="logo-dot"></span>AIDE</div>
+  <div class="nav-section">
+    <div class="nav-label">
+      <span>프로젝트</span>
+      <button class="nav-add-btn" onclick="openProjectModal()">+</button>
+    </div>
+    <div id="projectList"></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">태그</div>
+    <div id="tagList">
+      <span class="tag-pill active" onclick="filterTag('',this)">전체</span>
+      <span class="tag-pill" onclick="filterTag('시네마틱',this)">시네마틱</span>
+      <span class="tag-pill" onclick="filterTag('인물',this)">인물</span>
+      <span class="tag-pill" onclick="filterTag('제품',this)">제품</span>
+      <span class="tag-pill" onclick="filterTag('풍경',this)">풍경</span>
+      <span class="tag-pill" onclick="filterTag('애니메이션',this)">애니메이션</span>
+    </div>
+  </div>
+  <div class="theme-toggle">
+    <span id="theme-label">다크 모드</span>
+    <div class="toggle-btn on" id="themeToggle" onclick="toggleTheme()">
+      <div class="toggle-knob"></div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input class="search" placeholder="프롬프트 검색..." oninput="searchPrompts(this.value)">
+    </div>
+    <button class="btn-add" onclick="openAddModal()">+ 추가</button>
+  </div>
+  <div class="tool-tabs">
+    <button class="tool-tab active" onclick="filterTool('',this)">전체</button>
+    <button class="tool-tab" onclick="filterTool('Midjourney',this)">Midjourney</button>
+    <button class="tool-tab" onclick="filterTool('Kling',this)">Kling</button>
+    <button class="tool-tab" onclick="filterTool('Luma',this)">Luma</button>
+    <button class="tool-tab" onclick="filterTool('Hailuo',this)">Hailuo</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<!-- 상세 모달 -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="m-title"></div>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="modal-thumb" id="m-thumb"></div>
+    <span class="tool-badge" id="m-tool"></span>
+    <div class="modal-section" style="margin-top:10px;">
+      <div class="modal-label">프롬프트</div>
+      <div class="modal-prompt" id="m-prompt"></div>
+      <button class="btn-copy" onclick="copyPrompt()">복사</button>
+    </div>
+    <div class="modal-section">
+      <div class="modal-label">태그</div>
+      <div id="m-tags"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 프롬프트 추가 모달 -->
+<div class="modal-bg" id="addModal">
+  <div class="add-modal">
+    <div class="add-modal-header">
+      <div class="add-modal-title" id="stepTitle">파일 선택</div>
+      <button class="modal-close" onclick="closeAddModal()">✕</button>
+    </div>
+    <div class="steps">
+      <div class="step done" id="s1"></div>
+      <div class="step" id="s2"></div>
+    </div>
+    <div class="step-body">
+      <div id="step1">
+        <div class="dropzone" id="dropzone"
+          onclick="document.getElementById('fileInput').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleDrop(event)">
+          <div class="dropzone-icon">📎</div>
+          <div class="dropzone-title">이미지 또는 영상 선택</div>
+          <div class="dropzone-sub">클릭하거나 파일을 드래그하세요<br>PNG, JPG, MP4, MOV 지원</div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*,video/*" style="display:none" onchange="handleFile(this.files[0])">
+        <div id="previewWrap" style="display:none">
+          <div class="preview-thumb" id="previewThumb"></div>
+          <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:-6px;margin-bottom:10px;" id="previewName"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-cancel" onclick="closeAddModal()">취소</button>
+          <button class="btn-next" onclick="goStep2()">다음 →</button>
+        </div>
+      </div>
+      <div id="step2" style="display:none">
+        <div class="form-group">
+          <label class="form-label">제목</label>
+          <input class="form-input" id="f-title" placeholder="예: 듀스 뮤직비디오 씬 1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">프롬프트</label>
+          <textarea class="form-textarea" id="f-prompt" placeholder="사용한 프롬프트 입력..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">파라미터 빌더</label>
+          <div class="param-builder" id="paramBuilder"></div>
+          <div class="param-preview" id="param-preview"></div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <div class="form-group" style="flex:1">
+            <label class="form-label">툴</label>
+            <select class="form-select" id="f-tool" onchange="updateParamBuilder()">
+              <option>Midjourney</option><option>Kling</option><option>Luma</option><option>Hailuo</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="form-label">프로젝트</label>
+            <select class="form-select" id="f-project"></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">태그 (쉼표로 구분)</label>
+          <input class="form-input" id="f-tags" placeholder="시네마틱, 인물, 야외">
+        </div>
+        <div class="btn-row">
+          <button class="btn-cancel" onclick="goStep1()">← 이전</button>
+          <button class="btn-save" onclick="savePrompt()">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 프로젝트 추가 모달 -->
+<div class="modal-bg" id="projectModal">
+  <div class="small-modal">
+    <div class="modal-header" style="margin-bottom:14px;">
+      <div class="modal-title">새 프로젝트</div>
+      <button class="modal-close" onclick="closeProjectModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">프로젝트 이름</label>
+      <input class="form-input" id="p-name" placeholder="예: 현대자동차">
+    </div>
+    <div class="form-group">
+      <label class="form-label">색상</label>
+      <div class="color-picker" id="colorPicker"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="closeProjectModal()">취소</button>
+      <button class="btn-save" onclick="saveProject()">만들기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const EMOJIS=['🌊','🔥','🌙','⚡','🎬','🌸','💫','🎨','🏔','🌃'];
+const COLORS=['#7c6aff','#e24b4a','#27c16e','#f5a623','#4ac8e8','#e87ae8','#ff6b35','#aaa'];
+const PARAMS={
+  Midjourney:['--ar 16:9','--ar 1:1','--ar 9:16','--v 6','--style raw','--q 2','--no text','--chaos 20'],
+  Kling:['16:9','9:16','1:1','5s','10s','smooth','cinematic','pro'],
+  Luma:['16:9','4K','smooth','orbit','pan','timelapse','slow motion'],
+  Hailuo:['16:9','9:16','720p','1080p','slow motion','loop'],
+};
+
+let data={projects:[
+  {id:1,name:'듀스',color:'#7c6aff'},
+  {id:2,name:'나이키',color:'#e24b4a'},
+  {id:3,name:'삼성',color:'#27c16e'},
+],prompts:[
+  {id:1,title:'듀스 뮤직비디오 오프닝',tool:'Kling',projectId:1,tags:['시네마틱','인물'],fav:true,prompt:'cinematic opening shot, two male figures silhouetted against a neon-lit urban backdrop, fog machine effect, slow motion, 1990s Seoul aesthetic, film grain, anamorphic lens flare --ar 16:9',emoji:'🎬',file:null},
+  {id:2,title:'나이키 러닝화 제품샷',tool:'Midjourney',projectId:2,tags:['제품','시네마틱'],fav:false,prompt:'Nike running shoe, floating in mid air, dramatic studio lighting, white seamless background, 8k product photography, macro detail --ar 1:1 --v 6 --style raw',emoji:'⚡',file:null},
+  {id:3,title:'삼성 갤럭시 언팩 모션',tool:'Luma',projectId:3,tags:['제품','애니메이션'],fav:true,prompt:'Samsung Galaxy S25 Ultra smartphone, sleek dark environment, light particles swirling around device, premium tech advertisement, cinematic reveal 4K',emoji:'💫',file:null},
+  {id:4,title:'듀스 콘서트 군중',tool:'Hailuo',projectId:1,tags:['인물','풍경'],fav:false,prompt:'massive concert crowd, arms raised, colorful stage lights piercing through smoke, aerial drone shot, euphoric atmosphere, 90s Korea, film grain texture',emoji:'🔥',file:null},
+  {id:5,title:'나이키 달리기 슬로우모션',tool:'Kling',projectId:2,tags:['인물','시네마틱'],fav:true,prompt:'athlete running in slow motion, dramatic side profile, city street at golden hour, motion blur on background, sharp focus on determined face, Nike apparel',emoji:'🌊',file:null},
+  {id:6,title:'서울 야경 타임랩스',tool:'Luma',projectId:1,tags:['풍경','시네마틱'],fav:false,prompt:'Seoul cityscape timelapse, Han River at night, city lights reflecting on water, smooth camera pan, bokeh foreground, neon signs in background',emoji:'🌃',file:null},
+]};
+
+let activeTool='',activeProjectId='',activeTag='',searchQ='',isDark=true;
+let activeParams=new Set(),currentFile=null,currentPrompt=null,selColor=COLORS[0];
+
+function getProject(id){return data.projects.find(p=>p.id===id);}
+
+function persist(){
+  fetch('http://localhost:18765/api/save',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(data)
+  }).catch(()=>{});
+}
+
+function renderSidebar(){
+  const list=document.getElementById('projectList');
+  list.innerHTML=`<div class="nav-item ${activeProjectId===''?'active':''}" onclick="filterProject('',this)">
+    <div class="nav-item-left"><span style="font-size:12px;">전체</span></div>
+  </div>`+data.projects.map(p=>`
+    <div class="nav-item ${activeProjectId===p.id?'active':''}" onclick="filterProject(${p.id},this)">
+      <div class="nav-item-left">
+        <span class="nav-dot" style="background:${p.color}"></span>
+        <span>${p.name}</span>
+      </div>
+      <span class="nav-del" onclick="event.stopPropagation();delProject(${p.id})">✕</span>
+    </div>
+  `).join('');
+  const sel=document.getElementById('f-project');
+  if(sel) sel.innerHTML=data.projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+}
+
+function renderGrid(){
+  const grid=document.getElementById('grid');
+  let filtered=data.prompts.filter(p=>{
+    if(activeTool&&p.tool!==activeTool)return false;
+    if(activeProjectId!==''&&p.projectId!==activeProjectId)return false;
+    if(activeTag&&!p.tags.includes(activeTag))return false;
+    const q=searchQ.toLowerCase();
+    if(q&&!p.title.toLowerCase().includes(q)&&!p.prompt.toLowerCase().includes(q))return false;
+    return true;
+  });
+  if(!filtered.length){grid.innerHTML=`<div class="empty-state">프롬프트가 없어요<br><br><button class="btn-add" onclick="openAddModal()" style="margin:0 auto;display:block;">+ 추가하기</button></div>`;return;}
+  grid.innerHTML=filtered.map(p=>{
+    const proj=getProject(p.projectId);
+    const h=80+(p.id%5)*30;
+    const thumb=p.file
+      ?`<img src="${p.file}" style="width:100%;height:${h}px;object-fit:cover;">`
+      :`<div class="card-thumb-placeholder" style="height:${h}px;font-size:30px;">${p.emoji}</div>`;
+    return`<div class="card" onclick="openDetail(${p.id})">
+      ${thumb}
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span class="tool-badge">${p.tool}</span>
+          ${proj?`<span style="font-size:10px;color:${proj.color};">● ${proj.name}</span>`:''}
+        </div>
+        <div class="card-title">${p.title}</div>
+        <div class="card-prompt">${p.prompt}</div>
+        <div class="card-footer">
+          <div class="card-tags">${p.tags.map(t=>`<span class="card-tag">${t}</span>`).join('')}</div>
+          <span class="star ${p.fav?'on':''}" onclick="event.stopPropagation();toggleFav(${p.id})">${p.fav?'★':'☆'}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterTool(tool,el){activeTool=tool;document.querySelectorAll('.tool-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderGrid();}
+function filterProject(id,el){activeProjectId=id===''?'':parseInt(id)||id;renderSidebar();renderGrid();}
+function filterTag(tag,el){activeTag=tag;document.querySelectorAll('.tag-pill').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderGrid();}
+function searchPrompts(q){searchQ=q;renderGrid();}
+function toggleFav(id){const p=data.prompts.find(x=>x.id===id);if(p){p.fav=!p.fav;persist();}renderGrid();}
+
+function openDetail(id){
+  currentPrompt=data.prompts.find(p=>p.id===id);if(!currentPrompt)return;
+  document.getElementById('m-title').textContent=currentPrompt.title;
+  const thumb=document.getElementById('m-thumb');
+  thumb.innerHTML=currentPrompt.file
+    ?(currentPrompt.fileType==='video'?`<video src="${currentPrompt.file}" controls style="width:100%;border-radius:12px;">`:` <img src="${currentPrompt.file}" style="width:100%;border-radius:12px;">`)
+    :`<span style="font-size:56px;">${currentPrompt.emoji}</span>`;
+  document.getElementById('m-tool').textContent=currentPrompt.tool;
+  document.getElementById('m-prompt').textContent=currentPrompt.prompt;
+  document.getElementById('m-tags').innerHTML=currentPrompt.tags.map(t=>`<span class="tag-pill active" style="margin:0 4px 0 0">${t}</span>`).join('');
+  document.getElementById('detailModal').classList.add('open');
+}
+function closeDetail(){document.getElementById('detailModal').classList.remove('open');}
+function copyPrompt(){
+  if(!currentPrompt)return;
+  navigator.clipboard.writeText(currentPrompt.prompt).catch(()=>{});
+  const btn=document.querySelector('.btn-copy');
+  btn.textContent='복사됨!';setTimeout(()=>btn.textContent='복사',1500);
+}
+
+function openAddModal(){
+  currentFile=null;
+  document.getElementById('dropzone').style.display='';
+  document.getElementById('previewWrap').style.display='none';
+  document.getElementById('step1').style.display='';
+  document.getElementById('step2').style.display='none';
+  document.getElementById('s2').classList.remove('done');
+  document.getElementById('stepTitle').textContent='파일 선택';
+  document.getElementById('f-title').value='';
+  document.getElementById('f-prompt').value='';
+  document.getElementById('f-tags').value='';
+  activeParams.clear();
+  updateParamBuilder();
+  renderSidebar();
+  document.getElementById('addModal').classList.add('open');
+}
+function closeAddModal(){document.getElementById('addModal').classList.remove('open');}
+
+function handleFile(file){
+  if(!file)return;
+  currentFile=file;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('previewWrap').style.display='';
+    document.getElementById('dropzone').style.display='none';
+    document.getElementById('previewName').textContent=file.name;
+    const thumb=document.getElementById('previewThumb');
+    if(file.type.startsWith('image/')){
+      thumb.innerHTML=`<img src="${e.target.result}">`;
+    } else {
+      thumb.innerHTML=`<video src="${e.target.result}" controls style="width:100%;max-height:200px;border-radius:12px;"></video>`;
+    }
+    currentFile._dataUrl=e.target.result;
+    currentFile._isVideo=file.type.startsWith('video/');
+  };
+  reader.readAsDataURL(file);
+}
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag');
+  if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);
+}
+function goStep2(){document.getElementById('step1').style.display='none';document.getElementById('step2').style.display='';document.getElementById('s2').classList.add('done');document.getElementById('stepTitle').textContent='프롬프트 입력';}
+function goStep1(){document.getElementById('step1').style.display='';document.getElementById('step2').style.display='none';document.getElementById('s2').classList.remove('done');document.getElementById('stepTitle').textContent='파일 선택';}
+
+function updateParamBuilder(){
+  const tool=document.getElementById('f-tool')?.value||'Midjourney';
+  document.getElementById('paramBuilder').innerHTML=(PARAMS[tool]||[]).map(p=>
+    `<button class="param-btn ${activeParams.has(p)?'on':''}" onclick="toggleParam('${p}')">${p}</button>`
+  ).join('');
+  document.getElementById('param-preview').textContent=[...activeParams].join(' ');
+}
+function toggleParam(p){activeParams.has(p)?activeParams.delete(p):activeParams.add(p);updateParamBuilder();}
+
+function savePrompt(){
+  const title=document.getElementById('f-title').value.trim();
+  const prompt=document.getElementById('f-prompt').value.trim();
+  if(!title||!prompt)return;
+  const params=[...activeParams].join(' ');
+  const fullPrompt=params?prompt+' '+params:prompt;
+  const tags=document.getElementById('f-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const projId=parseInt(document.getElementById('f-project').value)||data.projects[0]?.id;
+  data.prompts.unshift({
+    id:Date.now(),title,tool:document.getElementById('f-tool').value,
+    projectId:projId,tags,fav:false,prompt:fullPrompt,
+    emoji:EMOJIS[Math.floor(Math.random()*EMOJIS.length)],
+    file:currentFile?._dataUrl||null,
+    fileType:currentFile?._isVideo?'video':'image'
+  });
+  persist();
+  closeAddModal();renderGrid();
+}
+
+function openProjectModal(){
+  selColor=COLORS[0];
+  document.getElementById('p-name').value='';
+  document.getElementById('colorPicker').innerHTML=COLORS.map((c,i)=>
+    `<div class="color-dot ${i===0?'sel':''}" style="background:${c}" onclick="selectColor('${c}',this)"></div>`
+  ).join('');
+  document.getElementById('projectModal').classList.add('open');
+}
+function closeProjectModal(){document.getElementById('projectModal').classList.remove('open');}
+function selectColor(c,el){selColor=c;document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('sel'));el.classList.add('sel');}
+function saveProject(){
+  const name=document.getElementById('p-name').value.trim();
+  if(!name)return;
+  data.projects.push({id:Date.now(),name,color:selColor});
+  persist();closeProjectModal();renderSidebar();
+}
+function delProject(id){
+  if(!confirm('프로젝트를 삭제할까요?'))return;
+  data.projects=data.projects.filter(p=>p.id!==id);
+  if(activeProjectId===id)activeProjectId='';
+  persist();renderSidebar();renderGrid();
+}
+
+function toggleTheme(){
+  isDark=!isDark;
+  const t=document.getElementById('themeToggle');
+  document.getElementById('theme-label').textContent=isDark?'다크 모드':'라이트 모드';
+  isDark?(document.body.classList.remove('light'),t.classList.add('on')):(document.body.classList.add('light'),t.classList.remove('on'));
+}
+
+// 로컬 API에서 데이터 불러오기
+fetch('http://localhost:18765/api/data')
+  .then(r=>r.json())
+  .then(loaded=>{
+    if(loaded.projects&&loaded.projects.length) data=loaded;
+    renderSidebar();renderGrid();
+  }).catch(()=>{renderSidebar();renderGrid();});
+
+document.getElementById('addModal').addEventListener('click',e=>{if(e.target===document.getElementById('addModal'))closeAddModal();});
+document.getElementById('detailModal').addEventListener('click',e=>{if(e.target===document.getElementById('detailModal'))closeDetail();});
+document.getElementById('projectModal').addEventListener('click',e=>{if(e.target===document.getElementById('projectModal'))closeProjectModal();});
+
+renderSidebar();
+renderGrid();
+</script>
+</body>
+</html>

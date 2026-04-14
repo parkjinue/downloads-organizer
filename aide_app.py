@@ -27,7 +27,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.20"
+CURRENT_VERSION = "v1.0.21"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -135,40 +135,27 @@ def download_and_update(download_url):
         tmp_zip_str = str(tmp_zip)
         update_script_path = str(Path.home() / "Downloads" / f"aide_updater_{ts}.sh")
 
-        script_content = "#!/bin/bash
-"
-        script_content += "sleep 2
-"
-        script_content += f'cp -R "{app_path_str}" "{app_path_str}.bak" 2>/dev/null || true
-'
-        script_content += f'rm -rf "{app_path_str}"
-'
-        script_content += f'mv "{new_app_str}" "{app_path_str}"
-'
-        script_content += "if [ $? -eq 0 ]; then
-"
-        script_content += f'    rm -rf "{app_path_str}.bak"
-'
-        script_content += f'    rm -rf "{extract_dir_str}"
-'
-        script_content += f'    rm -f "{tmp_zip_str}"
-'
-        script_content += f'    xattr -cr "{app_path_str}"
-'
-        script_content += f'    chmod -R 755 "{app_path_str}"
-'
-        script_content += f'    open "{app_path_str}"
-'
-        script_content += "else
-"
-        script_content += f'    mv "{app_path_str}.bak" "{app_path_str}"
-'
-        script_content += f'    open "{app_path_str}"
-'
-        script_content += "fi
-"
-        script_content += f'rm -f "{update_script_path}"
-'
+        lines_sh = [
+            "#!/bin/bash",
+            "sleep 2",
+            f'cp -R "{app_path_str}" "{app_path_str}.bak" 2>/dev/null || true',
+            f'rm -rf "{app_path_str}"',
+            f'mv "{new_app_str}" "{app_path_str}"',
+            "if [ $? -eq 0 ]; then",
+            f'    rm -rf "{app_path_str}.bak"',
+            f'    rm -rf "{extract_dir_str}"',
+            f'    rm -f "{tmp_zip_str}"',
+            f'    xattr -rd com.apple.quarantine "{app_path_str}" 2>/dev/null || true',
+            f'    xattr -cr "{app_path_str}" 2>/dev/null || true',
+            f'    chmod -R 755 "{app_path_str}"',
+            f'    open "{app_path_str}"',
+            "else",
+            f'    mv "{app_path_str}.bak" "{app_path_str}"',
+            f'    open "{app_path_str}"',
+            "fi",
+            f'rm -f "{update_script_path}"',
+        ]
+        script_content = "\n".join(lines_sh) + "\n"
 
         with open(update_script_path, "w", encoding="utf-8") as f:
             f.write(script_content)

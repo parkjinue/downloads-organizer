@@ -22,7 +22,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.6"
+CURRENT_VERSION = "v1.0.7"
 
 # 설정 파일 경로
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "DownloadsOrganizer" / "prefs.json"
@@ -235,6 +235,11 @@ class OrganizerApp(rumps.App):
             self.watch_dir = Path(folder)
             self.prefs["watch_dir"] = folder
             save_prefs(self.prefs)
+            # 메뉴 폴더명 갱신
+            for key in list(self.menu.keys()):
+                if key.startswith("📂") or key.startswith("🗂") or "Documents" in key or "Downloads" in key or "Desktop" in key:
+                    self.menu[key].title = f"📂 {self.watch_dir.name}"
+                    break
             self.start_watching()
             send_notification("📁 폴더 변경 완료", f"감시 폴더: {self.watch_dir.name}")
 

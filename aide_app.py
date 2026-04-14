@@ -27,7 +27,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.11"
+CURRENT_VERSION = "v1.0.12"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -102,10 +102,10 @@ def check_update():
 
 def download_and_update(download_url):
     try:
-        tmp_zip = Path.home() / "Downloads" / "aide_update.zip"
+        tmp_zip = Path.home() / "Downloads" / f"aide_update_{int(time.time())}.zip"
         app_path = Path("/Applications/AIDE.app")
         urllib.request.urlretrieve(download_url, tmp_zip)
-        extract_dir = Path.home() / "Downloads" / "aide_update"
+        extract_dir = Path.home() / "Downloads" / f"aide_update_{int(time.time())}"
         extract_dir.mkdir(exist_ok=True)
         with zipfile.ZipFile(tmp_zip, 'r') as z:
             z.extractall(extract_dir)

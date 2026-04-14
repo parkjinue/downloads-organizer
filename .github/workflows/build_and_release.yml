@@ -1,0 +1,45 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.11 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 라이브러리 설치
+        run: |
+          pip install rumps watchdog py2app setuptools
+
+      - name: 앱 빌드
+        run: |
+          python3 setup.py py2app
+
+      - name: 앱 압축
+        run: |
+          cd dist
+          zip -r "Downloads Organizer.zip" "Downloads Organizer.app"
+
+      - name: GitHub Release 생성 및 업로드
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Downloads Organizer.zip
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Downloads Organizer ${{ github.ref_name }}
+            1. 아래 Downloads Organizer.zip 다운로드
+            2. 압축 해제
+            3. Downloads Organizer.app 실행
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

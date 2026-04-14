@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Downloads Organizer - Menu Bar App
+Downloads Organizer - Menu Bar App (자동 업데이트 포함)
 """
 
 import rumps
@@ -8,17 +8,68 @@ import subprocess
 import threading
 import shutil
 import time
+import json
+import urllib.request
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+# ── 설정 ──────────────────────────────────────────────────
 WATCH_DIR = Path.home() / "Downloads"
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".heic", ".heif", ".svg", ".avif"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".mxf", ".prproj"}
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
+GITHUB_REPO = "parkjinue/downloads-organizer"
+CURRENT_VERSION = "v1.0.0"
 
+
+# ── 자동 업데이트 ─────────────────────────────────────────
+def check_update():
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url, headers={"User-Agent": "DownloadsOrganizer"})
+        with urllib.request.urlopen(req, timeout=5) as res:
+            data = json.loads(res.read())
+            latest = data.get("tag_name", "")
+            download_url = None
+            for asset in data.get("assets", []):
+                if asset["name"].endswith(".zip"):
+                    download_url = asset["browser_download_url"]
+                    break
+            return latest, download_url
+    except:
+        return None, None
+
+
+def download_and_update(download_url):
+    try:
+        tmp_zip = Path.home() / "Downloads" / "downloads_organizer_update.zip"
+        app_path = Path("/Applications/Downloads Organizer.app")
+
+        urllib.request.urlretrieve(download_url, tmp_zip)
+
+        extract_dir = Path.home() / "Downloads" / "organizer_update"
+        extract_dir.mkdir(exist_ok=True)
+        with zipfile.ZipFile(tmp_zip, 'r') as z:
+            z.extractall(extract_dir)
+
+        new_app = extract_dir / "Downloads Organizer.app"
+        if app_path.exists():
+            shutil.rmtree(app_path)
+        shutil.move(str(new_app), str(app_path))
+
+        tmp_zip.unlink()
+        shutil.rmtree(extract_dir)
+
+        send_notification("✅ 업데이트 완료", "앱을 재실행해주세요.")
+    except Exception as e:
+        send_notification("❌ 업데이트 실패", str(e))
+
+
+# ── 파일 처리 ─────────────────────────────────────────────
 def get_media_type(ext):
     ext = ext.lower()
     if ext in IMAGE_EXTENSIONS:
@@ -102,7 +153,6 @@ def process_file(file_path):
 
         shutil.move(str(file_path), str(dest_path))
         send_notification("📁 파일 정리 완료", f"{dest_path.name} → {project_name}/{media_type}/")
-
     except Exception as e:
         print(f"❌ 오류: {e}")
 
@@ -119,28 +169,56 @@ class DownloadHandler(FileSystemEventHandler):
             process_file(Path(event.dest_path))
 
 
+# ── 메뉴바 앱 ─────────────────────────────────────────────
 class OrganizerApp(rumps.App):
     def __init__(self):
         super().__init__("📁", quit_button=None)
         self.observer = None
         self.menu = [
             rumps.MenuItem("● 감시 중", callback=None),
+            rumps.MenuItem(f"버전 {CURRENT_VERSION}", callback=None),
             None,
             rumps.MenuItem("중지", callback=self.stop_watching),
+            rumps.MenuItem("업데이트 확인", callback=self.check_for_update),
             None,
             rumps.MenuItem("종료", callback=self.quit_app),
         ]
-        # 앱 시작 시 자동으로 감시 시작
         self.start_watching()
+        threading.Thread(target=self._auto_check_update, daemon=True).start()
+
+    def _auto_check_update(self):
+        time.sleep(3)
+        latest, download_url = check_update()
+        if latest and latest != CURRENT_VERSION:
+            self._prompt_update(latest, download_url)
+
+    def check_for_update(self, _):
+        def _check():
+            latest, download_url = check_update()
+            if latest and latest != CURRENT_VERSION:
+                self._prompt_update(latest, download_url)
+            elif latest:
+                send_notification("✅ 최신 버전", f"현재 {CURRENT_VERSION} 이 최신 버전입니다.")
+            else:
+                send_notification("❌ 확인 실패", "업데이트 서버에 연결할 수 없습니다.")
+        threading.Thread(target=_check, daemon=True).start()
+
+    def _prompt_update(self, latest, download_url):
+        response = rumps.alert(
+            title="업데이트 available",
+            message=f"새 버전 {latest} 이 있습니다. 업데이트할까요?",
+            ok="업데이트",
+            cancel="나중에"
+        )
+        if response == 1 and download_url:
+            threading.Thread(target=download_and_update, args=(download_url,), daemon=True).start()
 
     def start_watching(self):
         if self.observer and self.observer.is_alive():
             return
-
         self.observer = Observer()
         self.observer.schedule(DownloadHandler(), str(WATCH_DIR), recursive=False)
         self.observer.start()
-
         self.title = "📁"
         self.menu["● 감시 중"].title = "● 감시 중"
         self.menu["중지"].title = "중지"
@@ -151,7 +229,6 @@ class OrganizerApp(rumps.App):
             self.observer.stop()
             self.observer.join()
             self.observer = None
-
         self.title = "📁✕"
         self.menu["● 감시 중"].title = "○ 중지됨"
         self.menu["중지"].title = "시작"

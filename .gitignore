@@ -1,0 +1,8 @@
+venv/
+venv311/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+nohup.out

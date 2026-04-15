@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.26"
+CURRENT_VERSION = "v1.0.27"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -291,6 +291,10 @@ def process_file(file_path, watch_dir, current_project, foldering):
     if media_type is None:
         return
 
+    # 이미 날짜 prefix 붙은 파일은 처리 완료된 파일 → 무시
+    if is_date_prefix(name):
+        return
+
     date_prefix = datetime.now().strftime("%m%d")
 
     # ── 프로젝트 모드 ON ──────────────────────────────
@@ -299,7 +303,8 @@ def process_file(file_path, watch_dir, current_project, foldering):
         if "_" in name:
             file_project = name.split("_")[0]
             if (file_project != current_project
-                    and not should_ignore_keyword(name)
+                    and not file_project.isdigit()
+                    and file_project.lower() not in IGNORE_KEYWORDS
                     and not has_batch_consent(current_project)):
                 confirmed = confirm_dialog(
                     "프로젝트 확인",
@@ -308,6 +313,12 @@ def process_file(file_path, watch_dir, current_project, foldering):
                 if confirmed:
                     set_batch_consent(current_project)
                 else:
+                    # 아니오 → 날짜 네이밍만 하고 감시 폴더에 그대로
+                    if not is_date_prefix(name):
+                        new_stem = f"{date_prefix}_{name}"
+                        dest_path = watch_dir / f"{new_stem}{ext}"
+                        if not dest_path.exists():
+                            move_file(file_path, dest_path)
                     return
 
         # 파일명: 날짜 없으면 추가, 있으면 그대로
@@ -346,7 +357,14 @@ def process_file(file_path, watch_dir, current_project, foldering):
         else:
             dest_path = watch_dir / f"{new_stem}{ext}"
 
-    dest_path = get_unique_path(dest_path)
+    # 중복 파일 존재 시 덮어쓰기 확인
+    if dest_path.exists():
+        confirmed = confirm_dialog(
+            "파일 중복",
+            f"{dest_path.name} 이 이미 존재합니다.\n덮어쓸까요?"
+        )
+        if not confirmed:
+            return
 
     if move_file(file_path, dest_path):
         if foldering and current_project:
@@ -360,6 +378,17 @@ def process_file(file_path, watch_dir, current_project, foldering):
 # ── 배치 처리 (3개 이상 동시) ──────────────────────────
 def handle_batch(files, watch_dir, current_project, foldering):
     """3개 이상 파일 동시 감지 시 한번에 확인"""
+    # 이미지/영상만 필터링
+    files = [f for f in files if get_media_type(f.suffix) is not None and f.exists()]
+    if not files:
+        return
+
+    # 폴더링 꺼져있으면 팝업 없이 바로 처리
+    if not foldering:
+        for f in files:
+            process_file(f, watch_dir, current_project, foldering)
+        return
+
     if not current_project:
         for f in files:
             process_file(f, watch_dir, current_project, foldering)
@@ -391,12 +420,14 @@ class DownloadHandler(FileSystemEventHandler):
         self._pending = []
         self._timer = None
         self._lock = threading.Lock()
+        self._seen = set()  # 중복 감지 방지
 
     def _flush(self):
         with self._lock:
             files = list(self._pending)
             self._pending.clear()
             self._timer = None
+            self._seen.clear()
         if not files:
             return
         if len(files) >= 3:
@@ -415,6 +446,10 @@ class DownloadHandler(FileSystemEventHandler):
 
     def _schedule(self, path):
         with self._lock:
+            p = str(path)
+            if p in self._seen:
+                return
+            self._seen.add(p)
             self._pending.append(Path(path))
             if self._timer:
                 self._timer.cancel()

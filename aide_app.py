@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 AIDE - AI Creative Assistant
-메뉴바 앱 + 프롬프트 라이브러리
 """
 
+import re
 import rumps
 import subprocess
 import threading
@@ -14,38 +14,46 @@ import urllib.request
 import zipfile
 import os
 import webbrowser
-from http.server import HTTPServer, SimpleHTTPRequestHandler, BaseHTTPRequestHandler
-import urllib.parse
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-# ── 설정 ──────────────────────────────────────────────────
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".heic", ".heif", ".svg", ".avif"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".mxf", ".prproj"}
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.25"
+CURRENT_VERSION = "v1.0.26"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
 HTML_PATH = Path(__file__).parent / "aide_library.html"
 
+# 업데이트 중 파일 처리 차단 플래그
+_updating = False
 
-# ── 데이터 저장/불러오기 ──────────────────────────────────
+# 배치 동의 캐시: {project: expiry_timestamp}
+_batch_consent = {}
+_batch_lock = threading.Lock()
+_pending_files = []
+_pending_lock = threading.Lock()
+_batch_timer = None
+
+
+# ── 설정 ──────────────────────────────────────────────────
 def load_prefs():
     if PREFS_PATH.exists():
-        with open(PREFS_PATH) as f:
+        with open(PREFS_PATH, encoding="utf-8") as f:
             return json.load(f)
-    return {"watch_dir": str(Path.home() / "Downloads")}
+    return {"watch_dir": str(Path.home() / "Downloads"), "current_project": "", "foldering": True}
 
 
 def save_prefs(prefs):
     PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(PREFS_PATH, "w") as f:
-        json.dump(prefs, f)
+    with open(PREFS_PATH, "w", encoding="utf-8") as f:
+        json.dump(prefs, f, ensure_ascii=False)
 
 
 def load_library():
@@ -61,7 +69,7 @@ def save_library(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# ── 폴더 선택 ─────────────────────────────────────────────
+# ── 다이얼로그 ──────────────────────────────────────────
 def pick_folder():
     script = '''
     tell application "Finder"
@@ -76,7 +84,26 @@ def pick_folder():
     return None
 
 
-# ── 자동 업데이트 ─────────────────────────────────────────
+def input_dialog(title, message, default=""):
+    script = f'tell application "System Events" to set r to text returned of (display dialog "{message}" with title "{title}" default answer "{default}")'
+    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
+
+
+def confirm_dialog(title, message):
+    script = f'tell application "System Events" to set r to button returned of (display dialog "{message}" with title "{title}" buttons {{"취소", "확인"}} default button "확인")'
+    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    return result.returncode == 0 and "확인" in result.stdout
+
+
+def send_notification(title, message):
+    script = f'display notification "{message}" with title "{title}"'
+    subprocess.run(["osascript", "-e", script], capture_output=True)
+
+
+# ── 자동 업데이트 ──────────────────────────────────────
 def check_update():
     try:
         import ssl
@@ -101,6 +128,8 @@ def check_update():
 
 
 def download_and_update(download_url):
+    global _updating
+    _updating = True
     try:
         import sys
         ts = int(time.time())
@@ -128,7 +157,6 @@ def download_and_update(download_url):
         if new_app is None:
             raise Exception("App file not found")
 
-        # 경로를 ASCII 안전하게 처리
         app_path_str = str(app_path)
         new_app_str = str(new_app)
         extract_dir_str = str(extract_dir)
@@ -167,9 +195,11 @@ def download_and_update(download_url):
         rumps.quit_application()
 
     except Exception as e:
+        _updating = False
         send_notification("❌ 업데이트 실패", str(e))
 
 
+# ── 파일 처리 ──────────────────────────────────────────
 def get_media_type(ext):
     ext = ext.lower()
     if ext in IMAGE_EXTENSIONS:
@@ -179,17 +209,22 @@ def get_media_type(ext):
     return None
 
 
-def should_ignore(project_name):
-    if project_name.isdigit():
+def should_ignore_keyword(name):
+    first = name.split("_")[0] if "_" in name else name
+    if first.isdigit():
         return True
-    if project_name.lower() in IGNORE_KEYWORDS:
+    if first.lower() in IGNORE_KEYWORDS:
         return True
     return False
 
 
-def send_notification(title, message):
-    script = f'display notification "{message}" with title "{title}"'
-    subprocess.run(["osascript", "-e", script], capture_output=True)
+def is_date_prefix(name):
+    """MMDD 형식인지 정확히 검사 (월 01-12, 일 01-31)"""
+    m = re.match(r'^(\d{2})(\d{2})_', name)
+    if not m:
+        return False
+    month, day = int(m.group(1)), int(m.group(2))
+    return 1 <= month <= 12 and 1 <= day <= 31
 
 
 def get_unique_path(target_path):
@@ -206,63 +241,196 @@ def get_unique_path(target_path):
         counter += 1
 
 
-def process_file(file_path, watch_dir):
+def has_batch_consent(project):
+    """5분 배치 동의 캐시 확인"""
+    with _batch_lock:
+        expiry = _batch_consent.get(project, 0)
+        return time.time() < expiry
+
+
+def set_batch_consent(project, minutes=5):
+    with _batch_lock:
+        _batch_consent[project] = time.time() + minutes * 60
+
+
+def move_file(file_path, dest_path):
+    prev_size = -1
+    for _ in range(10):
+        try:
+            curr_size = file_path.stat().st_size
+        except:
+            return False
+        if curr_size == prev_size:
+            break
+        prev_size = curr_size
+        time.sleep(0.3)
+    try:
+        shutil.move(str(file_path), str(dest_path))
+        return True
+    except Exception as e:
+        send_notification("❌ 파일 이동 실패", f"{file_path.name}: {e}")
+        return False
+
+
+def process_file(file_path, watch_dir, current_project, foldering):
+    global _updating
+    if _updating:
+        return
+
     if file_path.name.startswith(".") or file_path.suffix in (".crdownload", ".part", ".tmp"):
         return
     if file_path.parent != watch_dir:
         return
     if not file_path.exists() or not file_path.is_file():
         return
+
     name = file_path.stem
     ext = file_path.suffix
-    if "_" not in name:
-        return
-    parts = name.split("_", 1)
-    project_name = parts[0]
-    rest_name = parts[1]
-    if not project_name or not rest_name:
-        return
-    if should_ignore(project_name):
-        return
     media_type = get_media_type(ext)
+
     if media_type is None:
         return
+
     date_prefix = datetime.now().strftime("%m%d")
-    dest_dir = watch_dir / project_name / media_type
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    new_filename = f"{date_prefix}_{rest_name}{ext}"
-    dest_path = dest_dir / new_filename
+
+    # ── 프로젝트 모드 ON ──────────────────────────────
+    if current_project:
+        # 다른 프로젝트명 감지 시 확인 (배치 동의 없을 때만)
+        if "_" in name:
+            file_project = name.split("_")[0]
+            if (file_project != current_project
+                    and not should_ignore_keyword(name)
+                    and not has_batch_consent(current_project)):
+                confirmed = confirm_dialog(
+                    "프로젝트 확인",
+                    f"파일명의 프로젝트({file_project})가\n현재 설정된 프로젝트({current_project})와 다릅니다.\n\n{current_project} 폴더로 이동할까요?\n(확인 시 5분간 자동 동의)"
+                )
+                if confirmed:
+                    set_batch_consent(current_project)
+                else:
+                    return
+
+        # 파일명: 날짜 없으면 추가, 있으면 그대로
+        if is_date_prefix(name):
+            new_stem = name
+        else:
+            new_stem = f"{date_prefix}_{name}"
+
+        if foldering:
+            dest_dir = watch_dir / current_project / media_type
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_path = dest_dir / f"{new_stem}{ext}"
+        else:
+            dest_path = watch_dir / f"{new_stem}{ext}"
+
+    # ── 프로젝트 모드 OFF ─────────────────────────────
+    else:
+        if "_" not in name:
+            return
+        if should_ignore_keyword(name):
+            return
+
+        parts = name.split("_", 1)
+        project_name = parts[0]
+        rest_name = parts[1]
+
+        if is_date_prefix(name):
+            new_stem = name
+        else:
+            new_stem = f"{date_prefix}_{rest_name}"
+
+        if foldering:
+            dest_dir = watch_dir / project_name / media_type
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_path = dest_dir / f"{new_stem}{ext}"
+        else:
+            dest_path = watch_dir / f"{new_stem}{ext}"
+
     dest_path = get_unique_path(dest_path)
-    try:
-        prev_size = -1
-        for _ in range(10):
-            curr_size = file_path.stat().st_size
-            if curr_size == prev_size:
-                break
-            prev_size = curr_size
-            time.sleep(0.3)
-        shutil.move(str(file_path), str(dest_path))
-        send_notification("📁 파일 정리 완료", f"{dest_path.name} → {project_name}/{media_type}/")
-    except Exception as e:
-        print(f"❌ 오류: {e}")
+
+    if move_file(file_path, dest_path):
+        if foldering and current_project:
+            send_notification("📁 파일 정리 완료", f"{dest_path.name} → {current_project}/{media_type}/")
+        elif foldering:
+            send_notification("📁 파일 정리 완료", f"{dest_path.name} → {dest_path.parent.name}/")
+        else:
+            send_notification("📝 파일명 변경 완료", f"{file_path.name} → {dest_path.name}")
+
+
+# ── 배치 처리 (3개 이상 동시) ──────────────────────────
+def handle_batch(files, watch_dir, current_project, foldering):
+    """3개 이상 파일 동시 감지 시 한번에 확인"""
+    if not current_project:
+        for f in files:
+            process_file(f, watch_dir, current_project, foldering)
+        return
+
+    if has_batch_consent(current_project):
+        for f in files:
+            process_file(f, watch_dir, current_project, foldering)
+        return
+
+    names = "\n".join([f.name for f in files[:5]])
+    if len(files) > 5:
+        names += f"\n... 외 {len(files)-5}개"
+
+    confirmed = confirm_dialog(
+        "파일 일괄 이동",
+        f"파일 {len(files)}개가 감지됐습니다.\n\n{names}\n\n모두 [{current_project}] 폴더로 이동할까요?\n(확인 시 5분간 자동 동의)"
+    )
+    if confirmed:
+        set_batch_consent(current_project)
+        for f in files:
+            process_file(f, watch_dir, current_project, foldering)
 
 
 class DownloadHandler(FileSystemEventHandler):
-    def __init__(self, watch_dir):
+    def __init__(self, watch_dir, app):
         self.watch_dir = watch_dir
+        self.app = app
+        self._pending = []
+        self._timer = None
+        self._lock = threading.Lock()
+
+    def _flush(self):
+        with self._lock:
+            files = list(self._pending)
+            self._pending.clear()
+            self._timer = None
+        if not files:
+            return
+        if len(files) >= 3:
+            threading.Thread(
+                target=handle_batch,
+                args=(files, self.watch_dir, self.app.current_project, self.app.foldering),
+                daemon=True
+            ).start()
+        else:
+            for f in files:
+                threading.Thread(
+                    target=process_file,
+                    args=(f, self.watch_dir, self.app.current_project, self.app.foldering),
+                    daemon=True
+                ).start()
+
+    def _schedule(self, path):
+        with self._lock:
+            self._pending.append(Path(path))
+            if self._timer:
+                self._timer.cancel()
+            self._timer = threading.Timer(1.5, self._flush)
+            self._timer.start()
 
     def on_created(self, event):
         if not event.is_directory:
-            time.sleep(1.0)
-            process_file(Path(event.src_path), self.watch_dir)
+            self._schedule(event.src_path)
 
     def on_moved(self, event):
         if not event.is_directory:
-            time.sleep(0.5)
-            process_file(Path(event.dest_path), self.watch_dir)
+            self._schedule(event.dest_path)
 
 
-# ── JS API (웹뷰 ↔ Python 통신) ───────────────────────────
+# ── JS API ────────────────────────────────────────────
 class LibraryAPI:
     def __init__(self):
         self.data = load_library()
@@ -276,20 +444,35 @@ class LibraryAPI:
         return "ok"
 
 
-# ── 메뉴바 앱 ─────────────────────────────────────────────
+# ── 메뉴바 앱 ─────────────────────────────────────────
 class AIDEApp(rumps.App):
     def __init__(self):
         super().__init__("✦", quit_button=None)
         self.observer = None
         self.prefs = load_prefs()
         self.watch_dir = Path(self.prefs["watch_dir"])
-        self.window = None
+        self.current_project = self.prefs.get("current_project", "")
+        self.foldering = self.prefs.get("foldering", True)
         self.api = LibraryAPI()
-
         self.folder_item = rumps.MenuItem(f"📂 {self.watch_dir.name}", callback=None)
+
+        self._build_menu()
+        self.start_watching()
+        threading.Thread(target=self._auto_check_update, daemon=True).start()
+
+    def _build_menu(self):
+        proj_label = self.current_project if self.current_project else "설정 안됨"
+        fold_label = "🟢 폴더링 [  켜짐  ]" if self.foldering else "🔴 폴더링 [  꺼짐  ]"
+
+        self.project_item = rumps.MenuItem(f"🎯 ─── {proj_label} ───", callback=self.set_project)
+        self.foldering_item = rumps.MenuItem(fold_label, callback=self.toggle_foldering)
+
         self.menu = [
             rumps.MenuItem("🟢 감시 중", callback=None),
             rumps.MenuItem(f"버전 {CURRENT_VERSION}", callback=None),
+            None,
+            self.project_item,
+            self.foldering_item,
             None,
             rumps.MenuItem("📚 라이브러리 열기", callback=self.open_library),
             None,
@@ -300,8 +483,28 @@ class AIDEApp(rumps.App):
             None,
             rumps.MenuItem("종료", callback=self.quit_app),
         ]
-        self.start_watching()
-        threading.Thread(target=self._auto_check_update, daemon=True).start()
+
+    def set_project(self, _=None):
+        def _ask():
+            current = self.current_project or ""
+            result = input_dialog(
+                "현재 프로젝트 설정",
+                "프로젝트명을 입력하세요.\n(비우면 파일명 기준으로 자동 분류)",
+                current
+            )
+            if result is not None:
+                self.current_project = result.strip()
+                self.prefs["current_project"] = self.current_project
+                save_prefs(self.prefs)
+                label = self.current_project if self.current_project else "설정 안됨"
+                self.project_item.title = f"🎯 ─── {label} ───"
+        threading.Thread(target=_ask, daemon=True).start()
+
+    def toggle_foldering(self, _=None):
+        self.foldering = not self.foldering
+        self.prefs["foldering"] = self.foldering
+        save_prefs(self.prefs)
+        self.foldering_item.title = "🟢 폴더링 [  켜짐  ]" if self.foldering else "🔴 폴더링 [  꺼짐  ]"
 
     def open_library(self, _=None):
         api = self.api
@@ -374,33 +577,23 @@ class AIDEApp(rumps.App):
         time.sleep(3)
         latest, download_url = check_update()
         if latest and latest != CURRENT_VERSION:
-            send_notification(
-                "🆕 AIDE 업데이트",
-                f"새 버전 {latest} 이 있습니다. 메뉴바에서 업데이트 확인을 눌러주세요."
-            )
-            self._pending_update = (latest, download_url)
+            send_notification("🆕 AIDE 업데이트", f"새 버전 {latest} 이 있습니다. 메뉴바에서 업데이트 확인을 눌러주세요.")
 
     def check_for_update(self, _=None):
         latest, download_url = check_update()
         if latest and latest != CURRENT_VERSION:
-            send_notification(
-                "🆕 업데이트 발견",
-                f"새 버전 {latest} 다운로드 중..."
-            )
+            send_notification("🆕 업데이트 발견", f"새 버전 {latest} 다운로드 중...")
             threading.Thread(target=download_and_update, args=(download_url,), daemon=True).start()
         elif latest:
             send_notification("✅ 최신 버전", f"{CURRENT_VERSION} 이 최신 버전입니다.")
         else:
             send_notification("❌ 확인 실패", "업데이트 서버에 연결할 수 없습니다.")
 
-    def _prompt_update(self, latest, download_url):
-        pass
-
     def start_watching(self):
         if self.observer and self.observer.is_alive():
             return
         self.observer = Observer()
-        self.observer.schedule(DownloadHandler(self.watch_dir), str(self.watch_dir), recursive=False)
+        self.observer.schedule(DownloadHandler(self.watch_dir, self), str(self.watch_dir), recursive=False)
         self.observer.start()
         self.title = "✦"
         self.menu["🟢 감시 중"].title = "🟢 감시 중"

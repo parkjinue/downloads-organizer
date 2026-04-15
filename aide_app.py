@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.27"
+CURRENT_VERSION = "v1.0.28"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -607,6 +607,18 @@ class AIDEApp(rumps.App):
             self.folder_item.title = f"📂 {self.watch_dir.name}"
             self.start_watching()
             send_notification("📁 폴더 변경 완료", f"감시 폴더: {self.watch_dir.name}")
+
+    def _show_update_notes(self):
+        time.sleep(1)
+        last = ""
+        if VERSION_PATH.exists():
+            last = VERSION_PATH.read_text().strip()
+        VERSION_PATH.parent.mkdir(parents=True, exist_ok=True)
+        VERSION_PATH.write_text(CURRENT_VERSION)
+        if last and last != CURRENT_VERSION:
+            msg = "AIDE " + CURRENT_VERSION + " 업데이트 완료!\n\n변경 사항:\n" + CHANGELOG_NOTES
+            script = 'tell application "System Events" to display dialog "' + msg + '" with title "AIDE 업데이트" buttons {"확인"} default button "확인"'
+            subprocess.run(["osascript", "-e", script], capture_output=True)
 
     def _auto_check_update(self):
         time.sleep(3)

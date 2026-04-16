@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.31"
+CURRENT_VERSION = "v1.0.32"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -305,8 +305,8 @@ def process_file(file_path, watch_dir, current_project, foldering):
             return
         if should_ignore_keyword(name):
             return
-    # 프로젝트 모드 OFF + 폴더링 OFF일 때도 날짜 붙은 파일 무시
-    elif not foldering:
+    # 프로젝트 모드 ON + 폴더링 OFF일 때 날짜 붙은 파일 무시
+    elif current_project and not foldering:
         if is_date_prefix(name):
             return
 
@@ -319,7 +319,6 @@ def process_file(file_path, watch_dir, current_project, foldering):
             file_project = name.split("_")[0]
             if (file_project != current_project
                     and not file_project.isdigit()
-                    and file_project.lower() not in IGNORE_KEYWORDS
                     and not has_batch_consent(current_project)):
                 confirmed = confirm_dialog(
                     "프로젝트 확인",

@@ -25,11 +25,21 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.29"
+CURRENT_VERSION = "v1.0.30"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
 HTML_PATH = Path(__file__).parent / "aide_library.html"
+
+LOG_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "aide.log"
+VERSION_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "last_version.txt"
+import logging as _logging
+_log_dir = Path.home() / "Library" / "Application Support" / "AIDE"
+_log_dir.mkdir(parents=True, exist_ok=True)
+_logging.basicConfig(filename=str(_log_dir / "aide.log"), level=_logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+def log(msg): _logging.info(msg)
+def log_err(msg): _logging.error(msg)
+
 
 # 업데이트 중 파일 처리 차단 플래그
 _updating = False

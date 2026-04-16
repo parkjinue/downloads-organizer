@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.28"
+CURRENT_VERSION = "v1.0.29"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -99,6 +99,7 @@ def confirm_dialog(title, message):
 
 
 def send_notification(title, message):
+    log(f"알림: {title} - {message}")
     script = f'display notification "{message}" with title "{title}"'
     subprocess.run(["osascript", "-e", script], capture_output=True)
 
@@ -291,9 +292,16 @@ def process_file(file_path, watch_dir, current_project, foldering):
     if media_type is None:
         return
 
-    # 이미 날짜 prefix 붙은 파일은 처리 완료된 파일 → 무시
-    if is_date_prefix(name):
-        return
+    # 프로젝트 모드 OFF일 때만: 날짜 붙은 파일 무시 + ignore keywords 체크
+    if not current_project:
+        if is_date_prefix(name):
+            return
+        if should_ignore_keyword(name):
+            return
+    # 프로젝트 모드 OFF + 폴더링 OFF일 때도 날짜 붙은 파일 무시
+    elif not foldering:
+        if is_date_prefix(name):
+            return
 
     date_prefix = datetime.now().strftime("%m%d")
 
@@ -337,8 +345,6 @@ def process_file(file_path, watch_dir, current_project, foldering):
     # ── 프로젝트 모드 OFF ─────────────────────────────
     else:
         if "_" not in name:
-            return
-        if should_ignore_keyword(name):
             return
 
         parts = name.split("_", 1)
@@ -515,6 +521,8 @@ class AIDEApp(rumps.App):
             self.folder_item,
             rumps.MenuItem("폴더 변경", callback=self.change_folder),
             rumps.MenuItem("업데이트 확인", callback=self.check_for_update),
+            rumps.MenuItem("🔍 로그 보기", callback=self.show_log),
+            rumps.MenuItem("📖 사용법 보기", callback=self.show_guide),
             None,
             rumps.MenuItem("종료", callback=self.quit_app),
         ]
@@ -662,6 +670,72 @@ class AIDEApp(rumps.App):
         self.menu["🟡 중지됨"].title = "🟢 감시 중"
         self.menu["중지"].title = "중지"
         self.menu["중지"].set_callback(self.stop_watching)
+
+    def show_guide(self, _=None):
+        guide = """AIDE 사용법
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+1. 프로젝트 설정하기
+━━━━━━━━━━━━━━━━━━━━━━━━
+① 메뉴바 🎯 클릭
+② 프로젝트명 입력 (예: 듀스)
+③ 이후 다운로드 파일이 자동으로
+   해당 프로젝트 폴더로 이동됩니다
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+2. 파일 정리 결과 예시
+━━━━━━━━━━━━━━━━━━━━━━━━
+폴더링 ON 상태:
+  씬1.png
+  → 듀스 / image / 0416_씬1.png
+
+폴더링 OFF 상태:
+  씬1.png
+  → 0416_씬1.png (제자리 유지)
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+3. 폴더링 스위치
+━━━━━━━━━━━━━━━━━━━━━━━━
+🟢 켜짐: 파일을 프로젝트 폴더로 이동
+🔴 꺼짐: 날짜만 붙이고 그대로 유지
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+4. 여러 파일 한번에 넣을 때
+━━━━━━━━━━━━━━━━━━━━━━━━
+3개 이상 동시에 감지되면 팝업이
+1번만 뜹니다. 확인하면 5분간
+자동으로 같은 프로젝트로 이동해요
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+5. 오류가 생겼을 때
+━━━━━━━━━━━━━━━━━━━━━━━━
+메뉴바 🔍 로그 보기 클릭
+→ 내용이 클립보드에 복사됩니다
+→ 리틀진우에게 붙여넣기해서 전달해주세요"""
+
+        script = f'tell application "System Events" to display dialog "{guide}" with title "AIDE 사용법" buttons {{"확인"}} default button "확인"'
+        threading.Thread(
+            target=lambda: subprocess.run(["osascript", "-e", script], capture_output=True),
+            daemon=True
+        ).start()
+
+    def show_log(self, _=None):
+        def _show():
+            try:
+                LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+                if not LOG_PATH.exists():
+                    lines = ["로그가 없습니다."]
+                else:
+                    with open(LOG_PATH, encoding="utf-8") as f:
+                        all_lines = f.readlines()
+                    lines = all_lines[-30:] if len(all_lines) > 30 else all_lines
+                log_text = "".join(lines).strip()
+                # 클립보드에 복사
+                subprocess.run(["pbcopy"], input=log_text.encode("utf-8"))
+                send_notification("📋 로그 복사 완료", "클립보드에 복사됐습니다. 담당자에게 붙여넣기 해주세요.")
+            except Exception as e:
+                send_notification("❌ 로그 오류", str(e))
+        threading.Thread(target=_show, daemon=True).start()
 
     def quit_app(self, _):
         self.stop_watching()

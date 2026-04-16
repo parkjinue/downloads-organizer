@@ -25,24 +25,18 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.30"
+CURRENT_VERSION = "v1.0.31"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
 HTML_PATH = Path(__file__).parent / "aide_library.html"
 
-LOG_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "aide.log"
-VERSION_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "last_version.txt"
-import logging as _logging
-_log_dir = Path.home() / "Library" / "Application Support" / "AIDE"
-_log_dir.mkdir(parents=True, exist_ok=True)
-_logging.basicConfig(filename=str(_log_dir / "aide.log"), level=_logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-def log(msg): _logging.info(msg)
-def log_err(msg): _logging.error(msg)
-
-
 # 업데이트 중 파일 처리 차단 플래그
 _updating = False
+
+# 마지막 이동 기록 (되돌리기용)
+_last_move = None  # (이동된경로, 원본경로)
+_undo_ignore = set()  # 되돌리기 중 무시할 파일 경로
 
 # 배치 동의 캐시: {project: expiry_timestamp}
 _batch_consent = {}
@@ -109,7 +103,6 @@ def confirm_dialog(title, message):
 
 
 def send_notification(title, message):
-    log(f"알림: {title} - {message}")
     script = f'display notification "{message}" with title "{title}"'
     subprocess.run(["osascript", "-e", script], capture_output=True)
 
@@ -294,6 +287,10 @@ def process_file(file_path, watch_dir, current_project, foldering):
         return
     if not file_path.exists() or not file_path.is_file():
         return
+    # 되돌리기로 복구된 파일은 무시
+    if str(file_path) in _undo_ignore:
+        _undo_ignore.discard(str(file_path))
+        return
 
     name = file_path.stem
     ext = file_path.suffix
@@ -383,6 +380,8 @@ def process_file(file_path, watch_dir, current_project, foldering):
             return
 
     if move_file(file_path, dest_path):
+        global _last_move
+        _last_move = (dest_path, file_path)
         if foldering and current_project:
             send_notification("📁 파일 정리 완료", f"{dest_path.name} → {current_project}/{media_type}/")
         elif foldering:
@@ -533,6 +532,7 @@ class AIDEApp(rumps.App):
             rumps.MenuItem("업데이트 확인", callback=self.check_for_update),
             rumps.MenuItem("🔍 로그 보기", callback=self.show_log),
             rumps.MenuItem("📖 사용법 보기", callback=self.show_guide),
+            rumps.MenuItem("↩️ 마지막 이동 되돌리기", callback=self.undo_last_move),
             None,
             rumps.MenuItem("종료", callback=self.quit_app),
         ]
@@ -681,6 +681,27 @@ class AIDEApp(rumps.App):
         self.menu["중지"].title = "중지"
         self.menu["중지"].set_callback(self.stop_watching)
 
+    def undo_last_move(self, _=None):
+        def _undo():
+            global _last_move
+            if not _last_move:
+                send_notification("↩️ 되돌리기 실패", "되돌릴 이동 기록이 없습니다.")
+                return
+            moved_path, original_path = _last_move
+            if not moved_path.exists():
+                send_notification("↩️ 되돌리기 실패", "파일을 찾을 수 없습니다.")
+                _last_move = None
+                return
+            try:
+                original_path.parent.mkdir(parents=True, exist_ok=True)
+                _undo_ignore.add(str(original_path))
+                shutil.move(str(moved_path), str(original_path))
+                _last_move = None
+                send_notification("↩️ 되돌리기 완료", f"{original_path.name} 원위치로 복구됐습니다.")
+            except Exception as e:
+                send_notification("↩️ 되돌리기 실패", str(e))
+        threading.Thread(target=_undo, daemon=True).start()
+
     def show_guide(self, _=None):
         guide = """AIDE 사용법
 
@@ -688,7 +709,7 @@ class AIDEApp(rumps.App):
 1. 프로젝트 설정하기
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ① 메뉴바 🎯 클릭
-② 프로젝트명 입력 (예: 듀스)
+② 프로젝트명 입력 (예: jtbc2)
 ③ 이후 다운로드 파일이 자동으로
    해당 프로젝트 폴더로 이동됩니다
 
@@ -697,7 +718,7 @@ class AIDEApp(rumps.App):
 ━━━━━━━━━━━━━━━━━━━━━━━━
 폴더링 ON 상태:
   씬1.png
-  → 듀스 / image / 0416_씬1.png
+  → jtbc2 / image / 0416_씬1.png
 
 폴더링 OFF 상태:
   씬1.png

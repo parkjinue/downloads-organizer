@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.32"
+CURRENT_VERSION = "v1.0.33"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -51,7 +51,7 @@ def load_prefs():
     if PREFS_PATH.exists():
         with open(PREFS_PATH, encoding="utf-8") as f:
             return json.load(f)
-    return {"watch_dir": str(Path.home() / "Downloads"), "current_project": "", "foldering": True}
+    return {"watch_dir": str(Path.home() / "Downloads"), "current_project": "", "foldering": True, "name_rule": "{date}_{name}"}
 
 
 def save_prefs(prefs):
@@ -276,7 +276,7 @@ def move_file(file_path, dest_path):
         return False
 
 
-def process_file(file_path, watch_dir, current_project, foldering):
+def process_file(file_path, watch_dir, current_project, foldering, notify=True, name_rule="{date}_{name}"):
     global _updating
     if _updating:
         return
@@ -335,11 +335,11 @@ def process_file(file_path, watch_dir, current_project, foldering):
                             move_file(file_path, dest_path)
                     return
 
-        # 파일명: 날짜 없으면 추가, 있으면 그대로
+        # 파일명: name_rule 적용
         if is_date_prefix(name):
             new_stem = name
         else:
-            new_stem = f"{date_prefix}_{name}"
+            new_stem = name_rule.replace("{date}", date_prefix).replace("{name}", name).replace("{project}", current_project or "")
 
         if foldering:
             dest_dir = watch_dir / current_project / media_type
@@ -360,7 +360,7 @@ def process_file(file_path, watch_dir, current_project, foldering):
         if is_date_prefix(name):
             new_stem = name
         else:
-            new_stem = f"{date_prefix}_{rest_name}"
+            new_stem = name_rule.replace("{date}", date_prefix).replace("{name}", rest_name).replace("{project}", project_name)
 
         if foldering:
             dest_dir = watch_dir / project_name / media_type
@@ -381,16 +381,17 @@ def process_file(file_path, watch_dir, current_project, foldering):
     if move_file(file_path, dest_path):
         global _last_move
         _last_move = (dest_path, file_path)
-        if foldering and current_project:
-            send_notification("📁 파일 정리 완료", f"{dest_path.name} → {current_project}/{media_type}/")
-        elif foldering:
-            send_notification("📁 파일 정리 완료", f"{dest_path.name} → {dest_path.parent.name}/")
-        else:
-            send_notification("📝 파일명 변경 완료", f"{file_path.name} → {dest_path.name}")
+        if notify:
+            if foldering and current_project:
+                send_notification("📁 파일 정리 완료", f"{dest_path.name} → {current_project}/{media_type}/")
+            elif foldering:
+                send_notification("📁 파일 정리 완료", f"{dest_path.name} → {dest_path.parent.name}/")
+            else:
+                send_notification("📝 파일명 변경 완료", f"{file_path.name} → {dest_path.name}")
 
 
 # ── 배치 처리 (3개 이상 동시) ──────────────────────────
-def handle_batch(files, watch_dir, current_project, foldering):
+def handle_batch(files, watch_dir, current_project, foldering, name_rule="{date}_{name}"):
     """3개 이상 파일 동시 감지 시 한번에 확인"""
     # 이미지/영상만 필터링
     files = [f for f in files if get_media_type(f.suffix) is not None and f.exists()]
@@ -423,8 +424,17 @@ def handle_batch(files, watch_dir, current_project, foldering):
     )
     if confirmed:
         set_batch_consent(current_project)
+        success = 0
         for f in files:
-            process_file(f, watch_dir, current_project, foldering)
+            try:
+                process_file(f, watch_dir, current_project, foldering, notify=False, name_rule=name_rule)
+                success += 1
+            except:
+                pass
+        if success == 1:
+            send_notification("📁 파일 정리 완료", f"1개 파일이 [{current_project}] 폴더로 이동됐습니다.")
+        elif success > 1:
+            send_notification("📁 파일 정리 완료", f"{success}개 파일이 [{current_project}] 폴더로 이동됐습니다.")
 
 
 class DownloadHandler(FileSystemEventHandler):
@@ -447,14 +457,14 @@ class DownloadHandler(FileSystemEventHandler):
         if len(files) >= 3:
             threading.Thread(
                 target=handle_batch,
-                args=(files, self.watch_dir, self.app.current_project, self.app.foldering),
+                args=(files, self.watch_dir, self.app.current_project, self.app.foldering, self.app.name_rule),
                 daemon=True
             ).start()
         else:
             for f in files:
                 threading.Thread(
                     target=process_file,
-                    args=(f, self.watch_dir, self.app.current_project, self.app.foldering),
+                    args=(f, self.watch_dir, self.app.current_project, self.app.foldering, True, self.app.name_rule),
                     daemon=True
                 ).start()
 
@@ -513,8 +523,10 @@ class AIDEApp(rumps.App):
         proj_label = self.current_project if self.current_project else "설정 안됨"
         fold_label = "🟢 폴더링 [  켜짐  ]" if self.foldering else "🔴 폴더링 [  꺼짐  ]"
 
+        self.name_rule = self.prefs.get("name_rule", "{date}_{name}")
         self.project_item = rumps.MenuItem(f"🎯 ─── {proj_label} ───", callback=self.set_project)
         self.foldering_item = rumps.MenuItem(fold_label, callback=self.toggle_foldering)
+        self.rule_item = rumps.MenuItem(f"📝 파일명 규칙: {self.name_rule}", callback=self.set_name_rule)
 
         self.menu = [
             rumps.MenuItem("🟢 감시 중", callback=None),
@@ -522,6 +534,7 @@ class AIDEApp(rumps.App):
             None,
             self.project_item,
             self.foldering_item,
+            self.rule_item,
             None,
             rumps.MenuItem("📚 라이브러리 열기", callback=self.open_library),
             None,
@@ -535,6 +548,17 @@ class AIDEApp(rumps.App):
             None,
             rumps.MenuItem("종료", callback=self.quit_app),
         ]
+
+    def set_name_rule(self, _=None):
+        # 토글: 날짜_이름 ↔ 프로젝트_날짜_이름
+        if self.name_rule == "{date}_{name}":
+            self.name_rule = "{project}_{date}_{name}"
+        else:
+            self.name_rule = "{date}_{name}"
+        self.prefs["name_rule"] = self.name_rule
+        save_prefs(self.prefs)
+        self.rule_item.title = f"📝 파일명: {self.name_rule}"
+        send_notification("📝 파일명 규칙 변경", self.name_rule)
 
     def set_project(self, _=None):
         def _ask():

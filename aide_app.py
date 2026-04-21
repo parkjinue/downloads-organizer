@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.33"
+CURRENT_VERSION = "v1.0.34"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -319,6 +319,7 @@ def process_file(file_path, watch_dir, current_project, foldering, notify=True, 
             file_project = name.split("_")[0]
             if (file_project != current_project
                     and not file_project.isdigit()
+                    and file_project.lower() not in IGNORE_KEYWORDS
                     and not has_batch_consent(current_project)):
                 confirmed = confirm_dialog(
                     "프로젝트 확인",
@@ -401,17 +402,25 @@ def handle_batch(files, watch_dir, current_project, foldering, name_rule="{date}
     # 폴더링 꺼져있으면 팝업 없이 바로 처리
     if not foldering:
         for f in files:
-            process_file(f, watch_dir, current_project, foldering)
+            process_file(f, watch_dir, current_project, foldering, notify=True)
         return
 
     if not current_project:
         for f in files:
-            process_file(f, watch_dir, current_project, foldering)
+            process_file(f, watch_dir, current_project, foldering, notify=len(files)==1)
         return
 
     if has_batch_consent(current_project):
-        for f in files:
-            process_file(f, watch_dir, current_project, foldering)
+        def _auto_batch():
+            success = 0
+            for f in files:
+                try:
+                    process_file(f, watch_dir, current_project, foldering, notify=False)
+                    success += 1
+                except: pass
+            if success > 0:
+                send_notification("📁 파일 정리 완료", f"{success}개 파일이 [{current_project}] 폴더로 이동됐습니다.")
+        threading.Thread(target=_auto_batch, daemon=True).start()
         return
 
     names = "\n".join([f.name for f in files[:5]])

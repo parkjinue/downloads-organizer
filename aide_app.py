@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.38"
+CURRENT_VERSION = "v1.0.39"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -90,9 +90,9 @@ def pick_folder():
 
 def input_dialog(title, message, default=""):
     script = f'tell application "System Events" to set r to text returned of (display dialog "{message}" with title "{title}" default answer "{default}")'
-    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    result = subprocess.run(["osascript", "-e", script], capture_output=True)
     if result.returncode == 0:
-        return result.stdout.strip()
+        return result.stdout.decode("utf-8").strip()
     return None
 
 

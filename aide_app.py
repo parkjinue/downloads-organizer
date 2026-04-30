@@ -25,7 +25,7 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m
 IGNORE_KEYWORDS = {"freepik", "hf", "magnifics", "kling"}
 
 GITHUB_REPO = "parkjinue/downloads-organizer"
-CURRENT_VERSION = "v1.0.36"
+CURRENT_VERSION = "v1.0.37"
 
 PREFS_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "prefs.json"
 LIBRARY_PATH = Path.home() / "Library" / "Application Support" / "AIDE" / "library.json"
@@ -582,9 +582,10 @@ class AIDEApp(rumps.App):
                 self.prefs["current_project"] = self.current_project
                 save_prefs(self.prefs)
                 label = self.current_project if self.current_project else "설정 안됨"
-                rumps.App.title.fset(self, self.title)
                 self.project_item.title = f"🎯 ─── {label} ───"
                 send_notification("✅ 프로젝트 변경", f"현재 프로젝트: {label}")
+            else:
+                send_notification("⚠️ 디버그", f"result가 None임: {repr(result)}")
         threading.Thread(target=_ask, daemon=True).start()
 
     def toggle_foldering(self, _=None):
